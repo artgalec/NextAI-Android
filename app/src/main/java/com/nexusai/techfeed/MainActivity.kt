@@ -203,7 +203,9 @@ object NewsRepository {
 
         for (wrap in wraps) {
             val msgDiv = wrap.selectFirst("div.tgme_widget_message") ?: continue
-            val postId = msgDiv.attr("data-post").ifBlank { continue }
+            val postId = msgDiv.attr("data-post")
+if (postId.isBlank()) continue
+
             val timeAttr = wrap.selectFirst("time[datetime]")?.attr("datetime") ?: continue
             val textEl = wrap.selectFirst("div.tgme_widget_message_text") ?: continue
             val text = textEl.text().replace(Regex("\\s+"), " ").trim()
