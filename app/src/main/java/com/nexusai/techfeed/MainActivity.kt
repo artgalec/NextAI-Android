@@ -47,7 +47,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -195,15 +194,25 @@ val AppPalettes = listOf(
     )
 )
 
+enum class AgentActivityMode(val label: String) {
+    WORKING("За столом"),
+    LUNCH("На обеде"),
+    LOUNGE("Отдых у ТВ")
+}
+
 data class AiAgentNode(
     val id: Int,
     val name: String,
     val role: String,
     val roomTitle: String,
     val accentColor: Color,
-    val rx: Float,
-    val ry: Float,
-    val deskAbove: Boolean
+    val deskRx: Float,
+    val deskRy: Float,
+    val deskAbove: Boolean,
+    val loungeRx: Float,
+    val loungeRy: Float,
+    val diningRx: Float,
+    val diningRy: Float
 )
 
 data class AgentTaskRecord(
@@ -220,6 +229,8 @@ data class AgentTaskRecord(
 data class AgentWorkState(
     val activeTask: AgentTaskRecord,
     val progress: Float,
+    val mode: AgentActivityMode = AgentActivityMode.WORKING,
+    val breakTicksLeft: Int = 0,
     val completedTasks: List<AgentTaskRecord>
 )
 
@@ -264,7 +275,6 @@ object NewsRepository {
         RssSite("Samsung Newsroom RU", "Samsung", "Оф. сайт", "https://news.samsung.com/ru/feed"),
         RssSite("Xiaomi Global Blog", "Xiaomi", "Оф. сайт", "https://blog.mi.com/en/feed/"),
         RssSite("Apple Newsroom", "Apple", "Оф. сайт", "https://www.apple.com/newsroom/rss-feed.rss"),
-        // Instagram-ленты брендов через RSS-мосты
         RssSite("Instagram @xiaomi", "Xiaomi", "Instagram", "https://rsshub.app/instagram/user/xiaomi"),
         RssSite("Instagram @samsungmobile", "Samsung", "Instagram", "https://rsshub.app/instagram/user/samsungmobile"),
         RssSite("Instagram @nothing", "Nothing", "Instagram", "https://rsshub.app/instagram/user/nothing"),
@@ -295,7 +305,6 @@ object NewsRepository {
         WebPageSource("Huawei Россия", "Huawei", "https://consumer.huawei.com/ru/community/", """/ru/community/details/[^"#?]+""")
     )
 
-    // Фильтр: оставляем строго технику (смартфоны, ТВ, ноутбуки, ПК, умный дом, электрокары), отбрасываем космос и оффтоп
     private val bannedTopics = listOf(
         "космос", "ракета", "роскосмос", "nasa", "spacex", "орбит", "спутник ",
         "астероид", "телескоп", "галактик", "марс ", "луна ", "лунн", "мкс",
@@ -819,7 +828,6 @@ fun NewsPulseAppScreen(
         }
     }
 
-    // Компактная выезжающая панель фильтров (убирает громоздкие блоки с главной страницы)
     if (showFilterSheet) {
         ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false },
@@ -855,7 +863,6 @@ fun NewsPulseAppScreen(
                     }
                 }
 
-                // Переключатель свежести
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -873,7 +880,6 @@ fun NewsPulseAppScreen(
                     )
                 }
 
-                // Источники (Платформы)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         "Откуда брать новости",
@@ -901,7 +907,6 @@ fun NewsPulseAppScreen(
                     }
                 }
 
-                // Бренды и категории техники
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         "Бренды и категории техники",
@@ -1002,7 +1007,6 @@ fun NewsPulseAppScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Компактная кнопка поиска
                             FilledTonalIconButton(
                                 onClick = {
                                     isSearchExpanded = !isSearchExpanded
@@ -1020,7 +1024,6 @@ fun NewsPulseAppScreen(
                                 )
                             }
 
-                            // Компактная кнопка фильтров (бренды и источники)
                             Box {
                                 FilledTonalIconButton(
                                     onClick = { showFilterSheet = true },
@@ -1047,7 +1050,6 @@ fun NewsPulseAppScreen(
                                 }
                             }
 
-                            // Кнопка обновления
                             Surface(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
@@ -1079,7 +1081,6 @@ fun NewsPulseAppScreen(
                     }
                 }
 
-                // Выдвижная строка поиска только по нажатию на кнопку лупы
                 AnimatedVisibility(visible = selectedTab == 0 && isSearchExpanded) {
                     Surface(
                         modifier = Modifier
@@ -1124,7 +1125,7 @@ fun NewsPulseAppScreen(
             }
         },
         bottomBar = {
-            FloatingCapsuleNavBar(
+            FullWidthBottomNavBar(
                 selectedTab = selectedTab,
                 savedCount = savedList.size,
                 onSelectTab = { selectedTab = it }
@@ -1204,8 +1205,9 @@ fun NewsPulseAppScreen(
     }
 }
 
+// Полноширинная нижняя панель навигации во весь экран
 @Composable
-fun FloatingCapsuleNavBar(
+fun FullWidthBottomNavBar(
     selectedTab: Int,
     savedCount: Int,
     onSelectTab: (Int) -> Unit
@@ -1213,43 +1215,42 @@ fun FloatingCapsuleNavBar(
     val primary = MaterialTheme.colorScheme.primary
     val surface = MaterialTheme.colorScheme.surface
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = surface,
+        shadowElevation = 12.dp
     ) {
-        Surface(
-            modifier = Modifier
-                .shadow(
-                    elevation = 10.dp,
-                    shape = RoundedCornerShape(28.dp),
-                    ambientColor = primary.copy(alpha = 0.25f),
-                    spotColor = primary.copy(alpha = 0.25f)
-                ),
-            shape = RoundedCornerShape(28.dp),
-            color = surface.copy(alpha = 0.96f),
-            border = BorderStroke(1.dp, primary.copy(alpha = 0.24f))
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(primary.copy(alpha = 0.22f))
+            )
             Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CapsuleNavItem(
+                FullWidthNavTab(
+                    modifier = Modifier.weight(1f),
                     selected = selectedTab == 0,
                     icon = Icons.Outlined.Newspaper,
                     label = "Лента",
                     onClick = { onSelectTab(0) }
                 )
-                CapsuleNavItem(
+                FullWidthNavTab(
+                    modifier = Modifier.weight(1f),
                     selected = selectedTab == 1,
                     icon = if (selectedTab == 1) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
                     label = if (savedCount > 0) "Избранное ($savedCount)" else "Избранное",
                     onClick = { onSelectTab(1) }
                 )
-                CapsuleNavItem(
+                FullWidthNavTab(
+                    modifier = Modifier.weight(1f),
                     selected = selectedTab == 2,
                     icon = if (selectedTab == 2) Icons.Filled.Settings else Icons.Outlined.Settings,
                     label = "Настройки",
@@ -1261,46 +1262,53 @@ fun FloatingCapsuleNavBar(
 }
 
 @Composable
-fun CapsuleNavItem(
+fun FullWidthNavTab(
+    modifier: Modifier = Modifier,
     selected: Boolean,
     icon: ImageVector,
     label: String,
     onClick: () -> Unit
 ) {
     val primary = MaterialTheme.colorScheme.primary
-    val bgColor by animateColorAsState(
+    val pillBg by animateColorAsState(
         targetValue = if (selected) primary.copy(alpha = 0.16f) else Color.Transparent,
-        label = "navBg"
+        label = "tabPill"
     )
     val contentColor by animateColorAsState(
-        targetValue = if (selected) primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-        label = "navContent"
+        targetValue = if (selected) primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+        label = "tabColor"
     )
 
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(22.dp))
-            .background(bgColor)
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = contentColor,
-            modifier = Modifier.size(19.dp)
-        )
-        if (selected) {
-            Text(
-                text = label,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = contentColor,
-                maxLines = 1
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(pillBg)
+                .padding(horizontal = 18.dp, vertical = 5.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = contentColor,
+                modifier = Modifier.size(21.dp)
             )
         }
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1387,14 +1395,14 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    "Персонализация тем, шрифта, карточек и офис из 8 ИИ-агентов",
+                    "Персонализация тем, шрифта, карточек и офис ИИ-агентов",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                 )
             }
         }
 
-        // Интерактивный ИИ-Офис (8 агентов)
+        // Интерактивный ИИ-Офис (8 агентов, столовая, лаунж с диваном и ТВ)
         item {
             val primary = MaterialTheme.colorScheme.primary
             Surface(
@@ -1447,7 +1455,7 @@ fun SettingsScreen(
                                 )
                             }
                             Text(
-                                "СМИ, Telegram, Instagram, ТВ, Ноутбуки, Электрокары",
+                                "Рабочие места, столовая, диванчики и телевизоры",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -1823,17 +1831,17 @@ fun AiOfficeLiveDialog(
 ) {
     val primary = MaterialTheme.colorScheme.primary
 
-    // 8 полноценных ИИ-агентов в 2 ряда (по 4 рабочих места)
+    // 8 агентов с координатами рабочего стола, диванчика у ТВ (lounge) и столовой (dining)
     val agents = remember {
         listOf(
-            AiAgentNode(0, "Алиса", "СМИ", "Отдел СМИ", Color(0xFF10B981), 0.14f, 0.25f, true),
-            AiAgentNode(1, "Макс", "Telegram", "Сектор TG", Color(0xFF38BDF8), 0.38f, 0.25f, true),
-            AiAgentNode(2, "Инста", "Instagram", "Сектор IG", Color(0xFFF43F5E), 0.62f, 0.25f, true),
-            AiAgentNode(3, "Авто-ИИ", "Электрокары", "Авто-лаб", Color(0xFF22D3EE), 0.86f, 0.25f, true),
-            AiAgentNode(4, "Дом-Бот", "ТВ и Дом", "Умный дом", Color(0xFFF59E0B), 0.14f, 0.76f, false),
-            AiAgentNode(5, "Ноут-ИИ", "Ноутбуки", "ПК-сектор", Color(0xFF818CF8), 0.38f, 0.76f, false),
-            AiAgentNode(6, "Нова", "Фильтр", "Анти-шум", Color(0xFFA78BFA), 0.62f, 0.76f, false),
-            AiAgentNode(7, "Пульс", "Редактор", "Дайджест", Color(0xFF34D399), 0.86f, 0.76f, false)
+            AiAgentNode(0, "Алиса", "СМИ", "Отдел СМИ", Color(0xFF10B981), 0.14f, 0.21f, true, 0.16f, 0.54f, 0.68f, 0.46f),
+            AiAgentNode(1, "Макс", "Telegram", "Сектор TG", Color(0xFF38BDF8), 0.38f, 0.21f, true, 0.25f, 0.54f, 0.78f, 0.46f),
+            AiAgentNode(2, "Инста", "Instagram", "Сектор IG", Color(0xFFF43F5E), 0.62f, 0.21f, true, 0.34f, 0.54f, 0.68f, 0.56f),
+            AiAgentNode(3, "Авто-ИИ", "Электрокары", "Авто-лаб", Color(0xFF22D3EE), 0.86f, 0.21f, true, 0.42f, 0.54f, 0.78f, 0.56f),
+            AiAgentNode(4, "Дом-Бот", "ТВ и Дом", "Умный дом", Color(0xFFF59E0B), 0.14f, 0.81f, false, 0.16f, 0.54f, 0.68f, 0.46f),
+            AiAgentNode(5, "Ноут-ИИ", "Ноутбуки", "ПК-сектор", Color(0xFF818CF8), 0.38f, 0.81f, false, 0.25f, 0.54f, 0.78f, 0.46f),
+            AiAgentNode(6, "Нова", "Фильтр", "Анти-шум", Color(0xFFA78BFA), 0.62f, 0.81f, false, 0.34f, 0.54f, 0.68f, 0.56f),
+            AiAgentNode(7, "Пульс", "Редактор", "Дайджест", Color(0xFF34D399), 0.86f, 0.81f, false, 0.42f, 0.54f, 0.78f, 0.56f)
         )
     }
 
@@ -1861,11 +1869,18 @@ fun AiOfficeLiveDialog(
                     toId = ag.id,
                     newsList = newsList
                 )
+                val initialMode = when (idx) {
+                    2 -> AgentActivityMode.LOUNGE
+                    5 -> AgentActivityMode.LUNCH
+                    else -> AgentActivityMode.WORKING
+                }
                 put(
                     ag.id,
                     AgentWorkState(
                         activeTask = initialCurrent,
-                        progress = 0.15f + (idx * 0.10f),
+                        progress = 0.20f + (idx * 0.09f),
+                        mode = initialMode,
+                        breakTicksLeft = if (initialMode != AgentActivityMode.WORKING) 6 else 0,
                         completedTasks = listOf(initialDone)
                     )
                 )
@@ -1873,13 +1888,37 @@ fun AiOfficeLiveDialog(
         }
     }
 
+    // Жизненный цикл: работа -> завершение задачи -> обед в столовой или отдых на диване у ТВ -> возврат за стол
     LaunchedEffect(isScanning, newsList.size) {
         while (true) {
-            delay(if (isScanning) 320L else 520L)
-            val stepIncrement = if (isScanning) 0.19f else 0.11f
+            delay(if (isScanning) 340L else 560L)
+            val stepIncrement = if (isScanning) 0.20f else 0.12f
 
             for (agId in 0..7) {
                 val current = agentWorkStates[agId] ?: continue
+
+                if (current.mode != AgentActivityMode.WORKING) {
+                    if (current.breakTicksLeft > 1) {
+                        agentWorkStates[agId] = current.copy(breakTicksLeft = current.breakTicksLeft - 1)
+                    } else {
+                        // Перерыв закончился, сотрудник возвращается за стол и берёт новую задачу
+                        ticketSeq += 1
+                        val nextSelfTask = generateFreshAgentTask(
+                            ticketNumber = ticketSeq,
+                            fromId = (agId + 3) % 8,
+                            toId = agId,
+                            newsList = newsList
+                        )
+                        agentWorkStates[agId] = current.copy(
+                            activeTask = nextSelfTask,
+                            progress = 0.05f,
+                            mode = AgentActivityMode.WORKING,
+                            breakTicksLeft = 0
+                        )
+                    }
+                    continue
+                }
+
                 val nextProgress = current.progress + stepIncrement
                 if (nextProgress >= 1.0f) {
                     val finishedTime = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
@@ -1895,19 +1934,35 @@ fun AiOfficeLiveDialog(
                     )
                     activeDispatch = newAssignedTask
 
-                    ticketSeq += 1
-                    val nextSelfTask = generateFreshAgentTask(
-                        ticketNumber = ticketSeq,
-                        fromId = (agId + 3) % 8,
-                        toId = agId,
-                        newsList = newsList
-                    )
+                    // После сдачи задачи агент периодически идёт на обед или отдохнуть на диванчике у ТВ
+                    val activeBreaksCount = agentWorkStates.values.count { it.mode != AgentActivityMode.WORKING }
+                    val goBreak = !isScanning && activeBreaksCount < 3 && ((ticketSeq + agId) % 3 == 0)
 
-                    agentWorkStates[agId] = AgentWorkState(
-                        activeTask = nextSelfTask,
-                        progress = 0.05f,
-                        completedTasks = (listOf(completedItem) + current.completedTasks).take(6)
-                    )
+                    if (goBreak) {
+                        val breakMode = if ((ticketSeq + agId) % 2 == 0) AgentActivityMode.LUNCH else AgentActivityMode.LOUNGE
+                        agentWorkStates[agId] = AgentWorkState(
+                            activeTask = current.activeTask,
+                            progress = 1.0f,
+                            mode = breakMode,
+                            breakTicksLeft = 7,
+                            completedTasks = (listOf(completedItem) + current.completedTasks).take(6)
+                        )
+                    } else {
+                        ticketSeq += 1
+                        val nextSelfTask = generateFreshAgentTask(
+                            ticketNumber = ticketSeq,
+                            fromId = (agId + 3) % 8,
+                            toId = agId,
+                            newsList = newsList
+                        )
+                        agentWorkStates[agId] = AgentWorkState(
+                            activeTask = nextSelfTask,
+                            progress = 0.05f,
+                            mode = AgentActivityMode.WORKING,
+                            breakTicksLeft = 0,
+                            completedTasks = (listOf(completedItem) + current.completedTasks).take(6)
+                        )
+                    }
                 } else {
                     agentWorkStates[agId] = current.copy(progress = nextProgress)
                 }
@@ -1915,12 +1970,38 @@ fun AiOfficeLiveDialog(
         }
     }
 
+    // Плавное перемещение человечков между столом, диваном и столовой
+    val animatedPositions = agents.map { ag ->
+        val mode = agentWorkStates[ag.id]?.mode ?: AgentActivityMode.WORKING
+        val targetX = when (mode) {
+            AgentActivityMode.WORKING -> ag.deskRx
+            AgentActivityMode.LOUNGE -> ag.loungeRx
+            AgentActivityMode.LUNCH -> ag.diningRx
+        }
+        val targetY = when (mode) {
+            AgentActivityMode.WORKING -> ag.deskRy
+            AgentActivityMode.LOUNGE -> ag.loungeRy
+            AgentActivityMode.LUNCH -> ag.diningRy
+        }
+        val animX by animateFloatAsState(
+            targetValue = targetX,
+            animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing),
+            label = "agentX_${ag.id}"
+        )
+        val animY by animateFloatAsState(
+            targetValue = targetY,
+            animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing),
+            label = "agentY_${ag.id}"
+        )
+        Offset(animX, animY)
+    }
+
     val senderAgent = agents[activeDispatch.fromAgentId]
     val receiverAgent = agents[activeDispatch.toAgentId]
     val inspectedAgent = agents[selectedAgentId]
     val inspectedWork = agentWorkStates[selectedAgentId]
 
-    val infiniteTransition = rememberInfiniteTransition(label = "officeWork8")
+    val infiniteTransition = rememberInfiniteTransition(label = "officeLoungeWork")
     val typingPhase by infiniteTransition.animateFloat(
         initialValue = -1f,
         targetValue = 1f,
@@ -1929,6 +2010,15 @@ fun AiOfficeLiveDialog(
             repeatMode = RepeatMode.Reverse
         ),
         label = "typing8"
+    )
+    val tvGlowPhase by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "tvGlow"
     )
     val packetTravel by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -1966,7 +2056,7 @@ fun AiOfficeLiveDialog(
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "Офис (8 ИИ-агентов)",
+                                "ИИ-Офис (8 агентов)",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -1977,8 +2067,8 @@ fun AiOfficeLiveDialog(
                                 color = Color(0xFF10B981).copy(alpha = 0.18f)
                             ) {
                                 Text(
-                                    text = if (isScanning) "АВРАЛ • 8/8" else "ВСЕ 8 В РАБОТЕ",
-                                    fontSize = 10.sp,
+                                    text = if (isScanning) "АВРАЛ • ВСЕ ЗА СТОЛОМ" else "РАБОТА • ОБЕД • ТВ",
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFF10B981),
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -1986,7 +2076,7 @@ fun AiOfficeLiveDialog(
                             }
                         }
                         Text(
-                            "Нажмите на любого из 8 сотрудников, чтобы увидеть его задачи",
+                            "Сотрудники выполняют задачи, обедают в столовой и смотрят ТВ",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                         )
@@ -1996,11 +2086,11 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Схема офиса с 8 рабочими местами, мебелью и человечками
+                // Схема офиса: 8 рабочих мест + Лаунж с диванами и ТВ + Столовая с кухней
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
+                        .height(360.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFF0A1412))
                         .border(1.2.dp, primary.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
@@ -2009,8 +2099,9 @@ fun AiOfficeLiveDialog(
                                 val w = size.width.toFloat()
                                 val h = size.height.toFloat()
                                 val tapped = agents.minByOrNull { ag ->
-                                    val dx = tap.x - ag.rx * w
-                                    val dy = tap.y - ag.ry * h
+                                    val pos = animatedPositions[ag.id]
+                                    val dx = tap.x - pos.x * w
+                                    val dy = tap.y - pos.y * h
                                     dx * dx + dy * dy
                                 }
                                 if (tapped != null) {
@@ -2023,59 +2114,181 @@ fun AiOfficeLiveDialog(
                         val w = size.width
                         val h = size.height
 
+                        // Плитка пола
                         val tile = 24.dp.toPx()
                         var x = tile
                         while (x < w) {
-                            drawLine(Color.White.copy(alpha = 0.04f), Offset(x, 0f), Offset(x, h), 1f)
+                            drawLine(Color.White.copy(alpha = 0.035f), Offset(x, 0f), Offset(x, h), 1f)
                             x += tile
                         }
                         var y = tile
                         while (y < h) {
-                            drawLine(Color.White.copy(alpha = 0.04f), Offset(0f, y), Offset(w, y), 1f)
+                            drawLine(Color.White.copy(alpha = 0.035f), Offset(0f, y), Offset(w, y), 1f)
                             y += tile
                         }
 
-                        // 8 рабочих зон (2 ряда по 4)
+                        // 8 рабочих кабинетов (верхний и нижний ряд)
                         val zoneW = w * 0.22f
-                        val zoneH = h * 0.37f
+                        val zoneH = h * 0.29f
                         agents.forEach { ag ->
                             val isSelected = ag.id == selectedAgentId
-                            val topLeft = Offset(ag.rx * w - zoneW / 2f, ag.ry * h - zoneH / 2f)
+                            val topLeft = Offset(ag.deskRx * w - zoneW / 2f, ag.deskRy * h - zoneH / 2f)
                             drawRoundRect(
-                                color = ag.accentColor.copy(alpha = if (isSelected) 0.18f else 0.06f),
+                                color = ag.accentColor.copy(alpha = if (isSelected) 0.16f else 0.05f),
                                 topLeft = topLeft,
                                 size = Size(zoneW, zoneH),
                                 cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
                             )
                             drawRoundRect(
-                                color = ag.accentColor.copy(alpha = if (isSelected) 0.9f else 0.28f),
+                                color = ag.accentColor.copy(alpha = if (isSelected) 0.85f else 0.22f),
                                 topLeft = topLeft,
                                 size = Size(zoneW, zoneH),
                                 cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx()),
-                                style = Stroke(width = if (isSelected) 1.8.dp.toPx() else 1.dp.toPx())
+                                style = Stroke(width = if (isSelected) 1.6.dp.toPx() else 1.dp.toPx())
                             )
                         }
 
-                        // Центральный коридор: диван и кулер
-                        val cx = w / 2f
-                        val cy = h / 2f
+                        // === ЛЕВАЯ ЦЕНТРАЛЬНАЯ ЗОНА: ЛАУНЖ-ЗОНА С ДИВАНЧИКАМИ И ТЕЛЕВИЗОРАМИ ===
+                        val loungeLeft = w * 0.035f
+                        val loungeTop = h * 0.37f
+                        val loungeW = w * 0.45f
+                        val loungeH = h * 0.26f
                         drawRoundRect(
-                            color = primary.copy(alpha = 0.1f),
-                            topLeft = Offset(cx - 56.dp.toPx(), cy - 16.dp.toPx()),
-                            size = Size(112.dp.toPx(), 32.dp.toPx()),
-                            cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
+                            color = Color(0xFF1E1B4B).copy(alpha = 0.45f),
+                            topLeft = Offset(loungeLeft, loungeTop),
+                            size = Size(loungeW, loungeH),
+                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = Color(0xFF818CF8).copy(alpha = 0.35f),
+                            topLeft = Offset(loungeLeft, loungeTop),
+                            size = Size(loungeW, loungeH),
+                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                            style = Stroke(width = 1.dp.toPx())
                         )
 
-                        // Столы, кресла, мониторы и 8 человечков
-                        agents.forEach { ag ->
-                            val px = ag.rx * w
-                            val py = ag.ry * h
-                            val isSelected = ag.id == selectedAgentId
-                            val handShift = typingPhase * 1.8.dp.toPx()
+                        // Широкий OLED-телевизор на верхней стенке лаунж-зоны
+                        val tvX = loungeLeft + loungeW * 0.22f
+                        val tvY = loungeTop + 7.dp.toPx()
+                        val tvW = loungeW * 0.56f
+                        drawRoundRect(
+                            color = Color(0xFF0F172A),
+                            topLeft = Offset(tvX, tvY),
+                            size = Size(tvW, 7.dp.toPx()),
+                            cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                        )
+                        drawLine(
+                            color = Color(0xFF38BDF8).copy(alpha = tvGlowPhase),
+                            start = Offset(tvX + 3.dp.toPx(), tvY + 7.dp.toPx()),
+                            end = Offset(tvX + tvW - 3.dp.toPx(), tvY + 7.dp.toPx()),
+                            strokeWidth = 2.5.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
 
-                            drawCompactWorkstationAndPerson(
+                        // Журнальный столик перед диваном
+                        drawRoundRect(
+                            color = Color(0xFF334155),
+                            topLeft = Offset(loungeLeft + loungeW * 0.34f, loungeTop + loungeH * 0.33f),
+                            size = Size(loungeW * 0.32f, 12.dp.toPx()),
+                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                        )
+
+                        // Мягкий диванчик с подушками внизу лаунж-зоны
+                        val sofaX = loungeLeft + loungeW * 0.12f
+                        val sofaY = loungeTop + loungeH * 0.64f
+                        val sofaW = loungeW * 0.76f
+                        val sofaH = 22.dp.toPx()
+                        drawRoundRect(
+                            color = Color(0xFF4F46E5).copy(alpha = 0.65f),
+                            topLeft = Offset(sofaX, sofaY),
+                            size = Size(sofaW, sofaH),
+                            cornerRadius = CornerRadius(7.dp.toPx(), 7.dp.toPx())
+                        )
+                        // Спинка дивана
+                        drawRoundRect(
+                            color = Color(0xFF3730A3),
+                            topLeft = Offset(sofaX, sofaY + sofaH - 6.dp.toPx()),
+                            size = Size(sofaW, 6.dp.toPx()),
+                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                        )
+
+                        // === ПРАВАЯ ЦЕНТРАЛЬНАЯ ЗОНА: СТОЛОВАЯ С ОБЕДЕННЫМ СТОЛОМ И КУХНЕЙ ===
+                        val diningLeft = w * 0.515f
+                        val diningTop = h * 0.37f
+                        val diningW = w * 0.45f
+                        val diningH = h * 0.26f
+                        drawRoundRect(
+                            color = Color(0xFF422006).copy(alpha = 0.42f),
+                            topLeft = Offset(diningLeft, diningTop),
+                            size = Size(diningW, diningH),
+                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = Color(0xFFF59E0B).copy(alpha = 0.35f),
+                            topLeft = Offset(diningLeft, diningTop),
+                            size = Size(diningW, diningH),
+                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                            style = Stroke(width = 1.dp.toPx())
+                        )
+
+                        // Кухонная стойка с кофемашиной и кулером справа
+                        drawRoundRect(
+                            color = Color(0xFF1E293B),
+                            topLeft = Offset(diningLeft + diningW - 18.dp.toPx(), diningTop + 10.dp.toPx()),
+                            size = Size(12.dp.toPx(), diningH - 20.dp.toPx()),
+                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                        )
+                        // Кулер (синий) и кофемашина (янтарная)
+                        drawCircle(
+                            color = Color(0xFF38BDF8),
+                            radius = 3.5.dp.toPx(),
+                            center = Offset(diningLeft + diningW - 12.dp.toPx(), diningTop + 22.dp.toPx())
+                        )
+                        drawCircle(
+                            color = Color(0xFFFBBF24),
+                            radius = 3.5.dp.toPx(),
+                            center = Offset(diningLeft + diningW - 12.dp.toPx(), diningTop + diningH - 22.dp.toPx())
+                        )
+
+                        // Большой обеденный стол по центру столовой
+                        val tableX = diningLeft + diningW * 0.16f
+                        val tableY = diningTop + diningH * 0.36f
+                        val tableW = diningW * 0.54f
+                        val tableH = 24.dp.toPx()
+                        drawRoundRect(
+                            color = Color(0xFF78350F),
+                            topLeft = Offset(tableX, tableY),
+                            size = Size(tableW, tableH),
+                            cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                        )
+                        // Тарелки на обеденном столе
+                        drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(tableX + tableW * 0.28f, tableY + 7.dp.toPx()))
+                        drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(tableX + tableW * 0.72f, tableY + 7.dp.toPx()))
+                        drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(tableX + tableW * 0.28f, tableY + tableH - 7.dp.toPx()))
+                        drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(tableX + tableW * 0.72f, tableY + tableH - 7.dp.toPx()))
+
+                        // === РАБОЧИЕ СТОЛЫ (всегда на своих местах) ===
+                        agents.forEach { ag ->
+                            drawFixedDeskStation(
+                                deskAnchorPos = Offset(ag.deskRx * w, ag.deskRy * h),
+                                deskAbove = ag.deskAbove,
+                                accentColor = ag.accentColor
+                            )
+                        }
+
+                        // === 8 ЧЕЛОВЕЧКОВ (сидят за столами, обедают или отдыхают на диване у ТВ) ===
+                        agents.forEach { ag ->
+                            val mode = agentWorkStates[ag.id]?.mode ?: AgentActivityMode.WORKING
+                            val animPos = animatedPositions[ag.id]
+                            val px = animPos.x * w
+                            val py = animPos.y * h
+                            val isSelected = ag.id == selectedAgentId
+                            val handShift = if (mode == AgentActivityMode.WORKING) typingPhase * 1.8.dp.toPx() else 0f
+
+                            drawDynamicOfficePerson(
                                 personPos = Offset(px, py),
                                 deskAbove = ag.deskAbove,
+                                mode = mode,
                                 shirtColor = ag.accentColor,
                                 handOffset = handShift,
                                 isHighlighted = isSelected
@@ -2083,21 +2296,21 @@ fun AiOfficeLiveDialog(
                         }
 
                         // Стрелка передачи новой задачи между сотрудниками
-                        val start = Offset(senderAgent.rx * w, senderAgent.ry * h)
-                        val end = Offset(receiverAgent.rx * w, receiverAgent.ry * h)
+                        val start = Offset(animatedPositions[senderAgent.id].x * w, animatedPositions[senderAgent.id].y * h)
+                        val end = Offset(animatedPositions[receiverAgent.id].x * w, animatedPositions[receiverAgent.id].y * h)
                         drawLine(
-                            color = senderAgent.accentColor.copy(alpha = 0.8f),
+                            color = senderAgent.accentColor.copy(alpha = 0.75f),
                             start = start,
                             end = end,
-                            strokeWidth = 2.dp.toPx(),
+                            strokeWidth = 1.8.dp.toPx(),
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
                         )
 
                         val angle = atan2(end.y - start.y, end.x - start.x)
-                        val arrowLen = 9.dp.toPx()
+                        val arrowLen = 8.dp.toPx()
                         val tip = Offset(
-                            end.x - 16.dp.toPx() * cos(angle),
-                            end.y - 16.dp.toPx() * sin(angle)
+                            end.x - 15.dp.toPx() * cos(angle),
+                            end.y - 15.dp.toPx() * sin(angle)
                         )
                         val arrowPath = Path().apply {
                             moveTo(tip.x, tip.y)
@@ -2117,23 +2330,41 @@ fun AiOfficeLiveDialog(
                         val packetY = start.y + (end.y - start.y) * packetTravel
                         drawCircle(
                             color = Color.White,
-                            radius = 5.dp.toPx(),
+                            radius = 4.5.dp.toPx(),
                             center = Offset(packetX, packetY)
                         )
                         drawCircle(
                             color = senderAgent.accentColor,
-                            radius = 3.dp.toPx(),
+                            radius = 2.8.dp.toPx(),
                             center = Offset(packetX, packetY)
                         )
                     }
 
-                    // Подписи имён 8 агентов у каждого стола
+                    // Подписи зон и имён 8 сотрудников
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                         val boxW = maxWidth
                         val boxH = maxHeight
+
+                        // Названия зон отдыха и столовой
+                        Text(
+                            text = "Лаунж • Диван и ТВ",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFA5B4FC),
+                            modifier = Modifier.offset(x = boxW * 0.06f, y = boxH * 0.38f)
+                        )
+                        Text(
+                            text = "Столовая и кофе",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFCD34D),
+                            modifier = Modifier.offset(x = boxW * 0.54f, y = boxH * 0.38f)
+                        )
+
+                        // Имена 8 агентов
                         agents.forEach { ag ->
-                            val offsetX = (boxW * ag.rx) - 34.dp
-                            val offsetY = if (ag.deskAbove) (boxH * ag.ry) + 18.dp else (boxH * ag.ry) - 34.dp
+                            val offsetX = (boxW * ag.deskRx) - 34.dp
+                            val offsetY = if (ag.deskAbove) (boxH * ag.deskRy) + 16.dp else (boxH * ag.deskRy) - 32.dp
                             Column(
                                 modifier = Modifier
                                     .offset(x = offsetX.coerceIn(4.dp, boxW - 72.dp), y = offsetY)
@@ -2157,23 +2388,23 @@ fun AiOfficeLiveDialog(
                         }
                     }
 
-                    // Всплывающий бабл последней переданной задачи в центре
+                    // Всплывающий бабл последней переданной задачи
                     Surface(
                         modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(horizontal = 16.dp),
-                        shape = RoundedCornerShape(10.dp),
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 6.dp, horizontal = 14.dp),
+                        shape = RoundedCornerShape(9.dp),
                         color = Color(0xFF0F2620).copy(alpha = 0.95f),
                         border = BorderStroke(1.dp, senderAgent.accentColor.copy(alpha = 0.75f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
                                 text = senderAgent.name,
-                                fontSize = 10.sp,
+                                fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = senderAgent.accentColor
                             )
@@ -2181,11 +2412,11 @@ fun AiOfficeLiveDialog(
                                 imageVector = Icons.Default.ArrowForward,
                                 contentDescription = null,
                                 tint = Color.White,
-                                modifier = Modifier.size(11.dp)
+                                modifier = Modifier.size(10.dp)
                             )
                             Text(
                                 text = "${receiverAgent.name}: #${activeDispatch.ticketNumber} ${activeDispatch.badge}",
-                                fontSize = 10.sp,
+                                fontSize = 9.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White
                             )
@@ -2193,7 +2424,7 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Сетка выбора любого из 8 агентов (2 ряда по 4)
+                // Сетка выбора любого из 8 агентов с индикатором статуса (Работа / Обед / ТВ)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     agents.chunked(4).forEach { rowAgents ->
                         Row(
@@ -2202,7 +2433,12 @@ fun AiOfficeLiveDialog(
                         ) {
                             rowAgents.forEach { ag ->
                                 val isSel = selectedAgentId == ag.id
-                                val doneCount = agentWorkStates[ag.id]?.completedTasks?.size ?: 0
+                                val workState = agentWorkStates[ag.id]
+                                val statusText = when (workState?.mode) {
+                                    AgentActivityMode.LUNCH -> "Обед"
+                                    AgentActivityMode.LOUNGE -> "У ТВ"
+                                    else -> "✓ ${workState?.completedTasks?.size ?: 0}"
+                                }
                                 Surface(
                                     modifier = Modifier
                                         .weight(1f)
@@ -2228,9 +2464,9 @@ fun AiOfficeLiveDialog(
                                             maxLines = 1
                                         )
                                         Text(
-                                            text = "✓ $doneCount",
+                                            text = statusText,
                                             fontSize = 9.sp,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                                         )
                                     }
                                 }
@@ -2239,7 +2475,7 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Досье выбранного агента: чем занят сейчас + история выполненных задач
+                // Досье выбранного агента
                 if (inspectedWork != null) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
@@ -2262,7 +2498,11 @@ fun AiOfficeLiveDialog(
                                     color = inspectedAgent.accentColor
                                 )
                                 Text(
-                                    text = "#${inspectedWork.activeTask.ticketNumber} • ${(inspectedWork.progress * 100).toInt()}%",
+                                    text = when (inspectedWork.mode) {
+                                        AgentActivityMode.LUNCH -> "Обедает в столовой"
+                                        AgentActivityMode.LOUNGE -> "Отдыхает на диване у ТВ"
+                                        AgentActivityMode.WORKING -> "#${inspectedWork.activeTask.ticketNumber} • ${(inspectedWork.progress * 100).toInt()}%"
+                                    },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = inspectedAgent.accentColor
@@ -2270,20 +2510,26 @@ fun AiOfficeLiveDialog(
                             }
 
                             Text(
-                                text = "В работе: ${inspectedWork.activeTask.title}",
+                                text = when (inspectedWork.mode) {
+                                    AgentActivityMode.LUNCH -> "Перерыв на обед: пьёт кофе и восстанавливает силы после закрытия задачи."
+                                    AgentActivityMode.LOUNGE -> "Перерыв в лаунж-зоне: сидит на диване и смотрит техно-обзоры по телевизору."
+                                    AgentActivityMode.WORKING -> "В работе: ${inspectedWork.activeTask.title}"
+                                },
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f)
                             )
 
-                            LinearProgressIndicator(
-                                progress = { inspectedWork.progress.coerceIn(0f, 1f) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(CircleShape),
-                                color = inspectedAgent.accentColor,
-                                trackColor = inspectedAgent.accentColor.copy(alpha = 0.2f)
-                            )
+                            if (inspectedWork.mode == AgentActivityMode.WORKING) {
+                                LinearProgressIndicator(
+                                    progress = { inspectedWork.progress.coerceIn(0f, 1f) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(CircleShape),
+                                    color = inspectedAgent.accentColor,
+                                    trackColor = inspectedAgent.accentColor.copy(alpha = 0.2f)
+                                )
+                            }
 
                             HorizontalDivider(color = inspectedAgent.accentColor.copy(alpha = 0.2f))
 
@@ -2339,7 +2585,7 @@ fun AiOfficeLiveDialog(
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (isScanning) "Все 8 агентов собирают новости..." else "Запустить общий сбор новостей (8 агентов)",
+                        text = if (isScanning) "Все 8 агентов за работой..." else "Запустить общий сбор новостей (8 агентов)",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -2349,23 +2595,21 @@ fun AiOfficeLiveDialog(
     }
 }
 
-private fun DrawScope.drawCompactWorkstationAndPerson(
-    personPos: Offset,
+private fun DrawScope.drawFixedDeskStation(
+    deskAnchorPos: Offset,
     deskAbove: Boolean,
-    shirtColor: Color,
-    handOffset: Float,
-    isHighlighted: Boolean
+    accentColor: Color
 ) {
     val dir = if (deskAbove) -1f else 1f
     val deskW = 40.dp.toPx()
-    val deskH = 16.dp.toPx()
-    val deskCenterY = personPos.y + dir * 16.dp.toPx()
+    val deskH = 15.dp.toPx()
+    val deskCenterY = deskAnchorPos.y + dir * 15.dp.toPx()
 
-    // Кресло
-    val chairCenterY = personPos.y - dir * 8.dp.toPx()
+    // Кресло у стола
+    val chairCenterY = deskAnchorPos.y - dir * 8.dp.toPx()
     drawRoundRect(
         color = Color(0xFF334155),
-        topLeft = Offset(personPos.x - 9.dp.toPx(), chairCenterY - 4.dp.toPx()),
+        topLeft = Offset(deskAnchorPos.x - 9.dp.toPx(), chairCenterY - 4.dp.toPx()),
         size = Size(18.dp.toPx(), 8.dp.toPx()),
         cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
     )
@@ -2373,13 +2617,13 @@ private fun DrawScope.drawCompactWorkstationAndPerson(
     // Стол
     drawRoundRect(
         color = Color(0xFF1E293B),
-        topLeft = Offset(personPos.x - deskW / 2f, deskCenterY - deskH / 2f),
+        topLeft = Offset(deskAnchorPos.x - deskW / 2f, deskCenterY - deskH / 2f),
         size = Size(deskW, deskH),
         cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
     )
     drawRoundRect(
         color = Color(0xFF475569),
-        topLeft = Offset(personPos.x - deskW / 2f, deskCenterY - deskH / 2f),
+        topLeft = Offset(deskAnchorPos.x - deskW / 2f, deskCenterY - deskH / 2f),
         size = Size(deskW, deskH),
         cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
         style = Stroke(width = 1.dp.toPx())
@@ -2388,18 +2632,31 @@ private fun DrawScope.drawCompactWorkstationAndPerson(
     // Монитор
     val monitorY = deskCenterY + dir * 2.dp.toPx()
     drawLine(
-        color = shirtColor,
-        start = Offset(personPos.x - 10.dp.toPx(), monitorY),
-        end = Offset(personPos.x + 10.dp.toPx(), monitorY),
+        color = accentColor,
+        start = Offset(deskAnchorPos.x - 10.dp.toPx(), monitorY),
+        end = Offset(deskAnchorPos.x + 10.dp.toPx(), monitorY),
         strokeWidth = 2.5.dp.toPx(),
         cap = StrokeCap.Round
     )
+}
 
-    val kbY = deskCenterY - dir * 4.dp.toPx()
+private fun DrawScope.drawDynamicOfficePerson(
+    personPos: Offset,
+    deskAbove: Boolean,
+    mode: AgentActivityMode,
+    shirtColor: Color,
+    handOffset: Float,
+    isHighlighted: Boolean
+) {
+    val dir = when (mode) {
+        AgentActivityMode.WORKING -> if (deskAbove) -1f else 1f
+        AgentActivityMode.LOUNGE -> -1f // Смотрит вверх на телевизор
+        AgentActivityMode.LUNCH -> 0f
+    }
 
     if (isHighlighted) {
         drawCircle(
-            color = shirtColor.copy(alpha = 0.25f),
+            color = shirtColor.copy(alpha = 0.28f),
             radius = 16.dp.toPx(),
             center = personPos
         )
@@ -2413,21 +2670,31 @@ private fun DrawScope.drawCompactWorkstationAndPerson(
         cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
     )
 
-    // Руки
-    drawLine(
-        color = Color(0xFFFDE68A),
-        start = Offset(personPos.x - 7.dp.toPx(), personPos.y + dir * 3.dp.toPx()),
-        end = Offset(personPos.x - 4.dp.toPx(), kbY + handOffset),
-        strokeWidth = 2.5.dp.toPx(),
-        cap = StrokeCap.Round
-    )
-    drawLine(
-        color = Color(0xFFFDE68A),
-        start = Offset(personPos.x + 7.dp.toPx(), personPos.y + dir * 3.dp.toPx()),
-        end = Offset(personPos.x + 4.dp.toPx(), kbY - handOffset),
-        strokeWidth = 2.5.dp.toPx(),
-        cap = StrokeCap.Round
-    )
+    if (mode == AgentActivityMode.WORKING) {
+        val deskCenterY = personPos.y + dir * 15.dp.toPx()
+        val kbY = deskCenterY - dir * 4.dp.toPx()
+        drawLine(
+            color = Color(0xFFFDE68A),
+            start = Offset(personPos.x - 7.dp.toPx(), personPos.y + dir * 3.dp.toPx()),
+            end = Offset(personPos.x - 4.dp.toPx(), kbY + handOffset),
+            strokeWidth = 2.5.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = Color(0xFFFDE68A),
+            start = Offset(personPos.x + 7.dp.toPx(), personPos.y + dir * 3.dp.toPx()),
+            end = Offset(personPos.x + 4.dp.toPx(), kbY - handOffset),
+            strokeWidth = 2.5.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    } else if (mode == AgentActivityMode.LUNCH) {
+        // В столовой держит кружку кофе
+        drawCircle(
+            color = Color(0xFFFBBF24),
+            radius = 2.8.dp.toPx(),
+            center = Offset(personPos.x + 9.dp.toPx(), personPos.y + 3.dp.toPx())
+        )
+    }
 
     // Голова
     drawCircle(
@@ -2437,7 +2704,7 @@ private fun DrawScope.drawCompactWorkstationAndPerson(
     )
     drawArc(
         color = Color(0xFF1E293B),
-        startAngle = if (deskAbove) 0f else 180f,
+        startAngle = if (dir <= 0f) 0f else 180f,
         sweepAngle = 180f,
         useCenter = true,
         topLeft = Offset(personPos.x - 5.5.dp.toPx(), personPos.y - 5.5.dp.toPx()),
