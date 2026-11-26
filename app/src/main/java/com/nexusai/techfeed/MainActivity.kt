@@ -24,10 +24,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Hub
@@ -203,13 +205,21 @@ data class AiAgentNode(
     val deskAbove: Boolean
 )
 
-data class AgentTaskAssignment(
-    val id: Long,
-    val fromId: Int,
-    val toId: Int,
-    val shortBadge: String,
-    val description: String,
-    val timeStr: String
+data class AgentTaskRecord(
+    val ticketNumber: Int,
+    val fromAgentId: Int,
+    val toAgentId: Int,
+    val badge: String,
+    val title: String,
+    val resultSummary: String,
+    val createdAt: String,
+    val completedAt: String = ""
+)
+
+data class AgentWorkState(
+    val activeTask: AgentTaskRecord,
+    val progress: Float,
+    val completedTasks: List<AgentTaskRecord>
 )
 
 data class TgChannel(val name: String, val defaultBrand: String, val username: String)
@@ -860,7 +870,7 @@ fun NewsPulseAppScreen(
                     .padding(top = innerPadding.calculateTopPadding()),
                 bottomPadding = innerPadding.calculateBottomPadding() + 16.dp,
                 settings = settings,
-                newsCount = newsList.size,
+                newsList = newsList,
                 isLoading = isLoading,
                 onSettingsChange = onSettingsChange,
                 onTriggerScan = { refreshFeed() },
@@ -1206,7 +1216,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     bottomPadding: androidx.compose.ui.unit.Dp,
     settings: UserAppSettings,
-    newsCount: Int,
+    newsList: List<NewsItem>,
     isLoading: Boolean,
     onSettingsChange: (UserAppSettings) -> Unit,
     onTriggerScan: () -> Unit,
@@ -1216,7 +1226,7 @@ fun SettingsScreen(
 
     if (showAiOfficeDialog) {
         AiOfficeLiveDialog(
-            newsCount = newsCount,
+            newsList = newsList,
             isScanning = isLoading,
             onRunScan = onTriggerScan,
             onDismiss = { showAiOfficeDialog = false }
@@ -1302,7 +1312,7 @@ fun SettingsScreen(
                                 )
                             }
                             Text(
-                                "4 агента за столами • Постановка задач друг другу",
+                                "4 агента • Активные и выполненные задачи по каждому",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -1577,9 +1587,65 @@ fun SettingsScreen(
     }
 }
 
+private fun generateFreshAgentTask(
+    ticketNumber: Int,
+    fromId: Int,
+    toId: Int,
+    newsList: List<NewsItem>
+): AgentTaskRecord {
+    val nowStr = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+    val sampleNews = if (newsList.isNotEmpty()) {
+        newsList[(ticketNumber * 3) % newsList.size]
+    } else null
+
+    val brandPool = listOf("Xiaomi", "Samsung", "Huawei", "Apple", "HONOR", "OnePlus", "Google", "realme", "NVIDIA", "OPPO")
+    val brand = sampleNews?.brand?.takeIf { it != "Общее" } ?: brandPool[ticketNumber % brandPool.size]
+    val source = sampleNews?.sourceLabel ?: listOf("4PDA", "Rozetked", "iXBT", "Telegram", "3DNews")[ticketNumber % 5]
+    val headlineHint = sampleNews?.title?.take(44)?.let { "«$it...»" } ?: "свежим анонсам $brand"
+
+    return when (toId) {
+        0 -> AgentTaskRecord(
+            ticketNumber = ticketNumber,
+            fromAgentId = fromId,
+            toAgentId = 0,
+            badge = "Парсинг $brand",
+            title = "Просканировать RSS-ленты $source и веб-порталы по теме $brand ($headlineHint)",
+            resultSummary = "Собрано и проверено ${3 + (ticketNumber % 6)} новых заметок из $source по бренду $brand",
+            createdAt = nowStr
+        )
+        1 -> AgentTaskRecord(
+            ticketNumber = ticketNumber,
+            fromAgentId = fromId,
+            toAgentId = 1,
+            badge = "Инсайд TG • $brand",
+            title = "Проверить посты в Telegram-каналах по $brand и сопоставить с $headlineHint",
+            resultSummary = "Найдено ${2 + (ticketNumber % 5)} свежих публикаций в Telegram без репостов",
+            createdAt = nowStr
+        )
+        2 -> AgentTaskRecord(
+            ticketNumber = ticketNumber,
+            fromAgentId = fromId,
+            toAgentId = 2,
+            badge = "Фильтр • $brand",
+            title = "Отсеять дубликаты по $brand из $source и присвоить теги материалу $headlineHint",
+            resultSummary = "Удалено ${1 + (ticketNumber % 4)} дублей, разметка тегов для $brand завершена",
+            createdAt = nowStr
+        )
+        else -> AgentTaskRecord(
+            ticketNumber = ticketNumber,
+            fromAgentId = fromId,
+            toAgentId = 3,
+            badge = "Сводка • $brand",
+            title = "Составить краткую суть новости $headlineHint для карточки в общей ленте",
+            resultSummary = "Готова краткая выжимка на русском языке и обновлена карточка $brand",
+            createdAt = nowStr
+        )
+    }
+}
+
 @Composable
 fun AiOfficeLiveDialog(
-    newsCount: Int,
+    newsList: List<NewsItem>,
     isScanning: Boolean,
     onRunScan: () -> Unit,
     onDismiss: () -> Unit
@@ -1630,61 +1696,99 @@ fun AiOfficeLiveDialog(
         )
     }
 
-    val taskTemplates = remember(newsCount) {
-        listOf(
-            Triple(0, 2, "Проверить 14 статей с 4PDA и Rozetked на дубли" to "Поиск дублей"),
-            Triple(1, 0, "Сверить утечку по Xiaomi 17T с официальным блогом" to "Сверка фактов"),
-            Triple(2, 3, "Подготовить краткую выжимку по HyperOS и Galaxy" to "Сводка новостей"),
-            Triple(3, 1, "Отследить реакцию в Telegram-каналах на анонс Apple" to "Мониторинг TG"),
-            Triple(0, 3, "Собрать дайджест из $newsCount свежих материалов для ленты" to "Сборка ленты"),
-            Triple(2, 0, "Найти дополнительные обзоры по Huawei и HONOR" to "Доп. поиск")
-        )
-    }
-
-    var taskStep by remember { mutableIntStateOf(0) }
-    var taskHistory by remember {
+    var ticketSeq by remember { mutableIntStateOf(105) }
+    var selectedAgentId by remember { mutableIntStateOf(0) }
+    var activeDispatch by remember {
         mutableStateOf(
-            listOf(
-                AgentTaskAssignment(
-                    id = 1L,
-                    fromId = 0,
-                    toId = 2,
-                    shortBadge = "Поиск дублей",
-                    description = "Проверить свежие статьи с 4PDA и Rozetked на совпадения",
-                    timeStr = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                )
-            )
+            generateFreshAgentTask(ticketNumber = 104, fromId = 0, toId = 2, newsList = newsList)
         )
     }
 
-    LaunchedEffect(isScanning) {
-        while (true) {
-            delay(if (isScanning) 1800L else 3400L)
-            taskStep = (taskStep + 1) % taskTemplates.size
-            val (from, to, info) = taskTemplates[taskStep]
-            val nowTime = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-            val newTask = AgentTaskAssignment(
-                id = System.currentTimeMillis(),
-                fromId = from,
-                toId = to,
-                shortBadge = info.second,
-                description = info.first,
-                timeStr = nowTime
-            )
-            taskHistory = (listOf(newTask) + taskHistory).take(4)
+    // Состояние каждого из 4 агентов: текущая задача с прогрессом + история выполненных
+    val agentWorkStates = remember {
+        mutableStateMapOf<Int, AgentWorkState>().apply {
+            agents.forEachIndexed { idx, ag ->
+                val initialDone = generateFreshAgentTask(
+                    ticketNumber = 100 + idx,
+                    fromId = (idx + 3) % 4,
+                    toId = ag.id,
+                    newsList = newsList
+                ).copy(completedAt = ZonedDateTime.now().minusMinutes(1).format(DateTimeFormatter.ofPattern("HH:mm:ss")))
+
+                val initialCurrent = generateFreshAgentTask(
+                    ticketNumber = 104 + idx,
+                    fromId = (idx + 1) % 4,
+                    toId = ag.id,
+                    newsList = newsList
+                )
+                put(
+                    ag.id,
+                    AgentWorkState(
+                        activeTask = initialCurrent,
+                        progress = 0.25f + idx * 0.18f,
+                        completedTasks = listOf(initialDone)
+                    )
+                )
+            }
         }
     }
 
-    val currentTask = taskHistory.first()
-    val senderAgent = agents[currentTask.fromId]
-    val receiverAgent = agents[currentTask.toId]
+    // Живой цикл выполнения задач: каждый агент доводит задачу до 100%, закрывает её в "Выполненные" и ставит следующую
+    LaunchedEffect(isScanning, newsList.size) {
+        while (true) {
+            delay(if (isScanning) 350L else 550L)
+            val stepIncrement = if (isScanning) 0.18f else 0.11f
+
+            for (agId in 0..3) {
+                val current = agentWorkStates[agId] ?: continue
+                val nextProgress = current.progress + stepIncrement
+                if (nextProgress >= 1.0f) {
+                    val finishedTime = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                    val completedItem = current.activeTask.copy(completedAt = finishedTime)
+
+                    // Агент завершил свою задачу и ставит новое поручение другому коллеге
+                    val nextReceiverId = (agId + 1 + (ticketSeq % 3)) % 4
+                    ticketSeq += 1
+                    val newAssignedTask = generateFreshAgentTask(
+                        ticketNumber = ticketSeq,
+                        fromId = agId,
+                        toId = nextReceiverId,
+                        newsList = newsList
+                    )
+                    activeDispatch = newAssignedTask
+
+                    // Самому себе агент берёт свежую задачу из очереди
+                    ticketSeq += 1
+                    val nextSelfTask = generateFreshAgentTask(
+                        ticketNumber = ticketSeq,
+                        fromId = (agId + 2) % 4,
+                        toId = agId,
+                        newsList = newsList
+                    )
+
+                    agentWorkStates[agId] = AgentWorkState(
+                        activeTask = nextSelfTask,
+                        progress = 0.05f,
+                        completedTasks = (listOf(completedItem) + current.completedTasks).take(6)
+                    )
+                } else {
+                    agentWorkStates[agId] = current.copy(progress = nextProgress)
+                }
+            }
+        }
+    }
+
+    val senderAgent = agents[activeDispatch.fromAgentId]
+    val receiverAgent = agents[activeDispatch.toAgentId]
+    val inspectedAgent = agents[selectedAgentId]
+    val inspectedWork = agentWorkStates[selectedAgentId]
 
     val infiniteTransition = rememberInfiniteTransition(label = "officeWork")
     val typingPhase by infiniteTransition.animateFloat(
         initialValue = -1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 360, easing = LinearEasing),
+            animation = tween(durationMillis = 340, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "typing"
@@ -1693,7 +1797,7 @@ fun AiOfficeLiveDialog(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1700, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "packetTravel"
@@ -1706,15 +1810,18 @@ fun AiOfficeLiveDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 18.dp),
+                .padding(horizontal = 12.dp, vertical = 14.dp),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.2.dp, primary.copy(alpha = 0.35f))
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Заголовок окна
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1734,7 +1841,7 @@ fun AiOfficeLiveDialog(
                                 color = Color(0xFF10B981).copy(alpha = 0.18f)
                             ) {
                                 Text(
-                                    text = if (isScanning) "АВРАЛ • СБОР" else "РАБОТАЮТ",
+                                    text = if (isScanning) "АВРАЛ • СБОР" else "ВЫПОЛНЯЮТ ЗАДАЧИ",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFF10B981),
@@ -1743,7 +1850,7 @@ fun AiOfficeLiveDialog(
                             }
                         }
                         Text(
-                            "Нажмите на любого сотрудника, чтобы дать ему поручение",
+                            "Нажмите на человечка на карте, чтобы открыть его задачи",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                         )
@@ -1753,10 +1860,11 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
+                // Интерактивная схема офиса с мебелью и человечками
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(310.dp)
+                        .height(275.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFF0A1412))
                         .border(1.2.dp, primary.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
@@ -1770,16 +1878,7 @@ fun AiOfficeLiveDialog(
                                     dx * dx + dy * dy
                                 }
                                 if (tapped != null) {
-                                    val nextTarget = agents[(tapped.id + 1) % agents.size]
-                                    val manualTask = AgentTaskAssignment(
-                                        id = System.currentTimeMillis(),
-                                        fromId = tapped.id,
-                                        toId = nextTarget.id,
-                                        shortBadge = "Ручной запрос",
-                                        description = "${tapped.name} передал(а) срочную подборку новостей агенту ${nextTarget.name}",
-                                        timeStr = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                                    )
-                                    taskHistory = (listOf(manualTask) + taskHistory).take(4)
+                                    selectedAgentId = tapped.id
                                 }
                             }
                         }
@@ -1812,25 +1911,24 @@ fun AiOfficeLiveDialog(
 
                         rooms.forEachIndexed { idx, topLeft ->
                             val ag = agents[idx]
-                            val isActiveInTask = ag.id == currentTask.fromId || ag.id == currentTask.toId
+                            val isSelected = ag.id == selectedAgentId
                             drawRoundRect(
-                                color = ag.accentColor.copy(alpha = if (isActiveInTask) 0.13f else 0.05f),
+                                color = ag.accentColor.copy(alpha = if (isSelected) 0.16f else 0.05f),
                                 topLeft = topLeft,
                                 size = Size(roomW, roomH),
                                 cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
                             )
                             drawRoundRect(
-                                color = ag.accentColor.copy(alpha = if (isActiveInTask) 0.65f else 0.25f),
+                                color = ag.accentColor.copy(alpha = if (isSelected) 0.85f else 0.25f),
                                 topLeft = topLeft,
                                 size = Size(roomW, roomH),
                                 cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
-                                style = Stroke(width = 1.5.dp.toPx())
+                                style = Stroke(width = if (isSelected) 2.dp.toPx() else 1.5.dp.toPx())
                             )
                         }
 
                         val cx = w / 2f
                         val cy = h / 2f
-
                         drawRoundRect(
                             color = primary.copy(alpha = 0.12f),
                             topLeft = Offset(cx - 42.dp.toPx(), cy - 26.dp.toPx()),
@@ -1863,21 +1961,21 @@ fun AiOfficeLiveDialog(
                         agents.forEach { ag ->
                             val px = ag.rx * w
                             val py = ag.ry * h
-                            val isBusy = ag.id == currentTask.fromId || ag.id == currentTask.toId
-                            val handShift = if (isBusy) typingPhase * 2.5.dp.toPx() else typingPhase * 0.8.dp.toPx()
+                            val isSelected = ag.id == selectedAgentId
+                            val handShift = typingPhase * 2.2.dp.toPx()
 
                             drawOfficeWorkstationAndPerson(
                                 personPos = Offset(px, py),
                                 deskAbove = ag.deskAbove,
                                 shirtColor = ag.accentColor,
                                 handOffset = handShift,
-                                isHighlighted = isBusy
+                                isHighlighted = isSelected
                             )
                         }
 
+                        // Стрелка передачи новой задачи
                         val start = Offset(senderAgent.rx * w, senderAgent.ry * h)
                         val end = Offset(receiverAgent.rx * w, receiverAgent.ry * h)
-
                         drawLine(
                             color = senderAgent.accentColor.copy(alpha = 0.75f),
                             start = start,
@@ -1923,6 +2021,7 @@ fun AiOfficeLiveDialog(
                         )
                     }
 
+                    // Подписи комнат и сотрудников
                     agents.forEach { ag ->
                         val align = when (ag.id) {
                             0 -> Alignment.TopStart
@@ -1930,6 +2029,7 @@ fun AiOfficeLiveDialog(
                             2 -> Alignment.BottomStart
                             else -> Alignment.BottomEnd
                         }
+                        val doneCount = agentWorkStates[ag.id]?.completedTasks?.size ?: 0
                         Column(
                             modifier = Modifier
                                 .align(align)
@@ -1937,9 +2037,9 @@ fun AiOfficeLiveDialog(
                             horizontalAlignment = if (ag.id % 2 == 1) Alignment.End else Alignment.Start
                         ) {
                             Text(
-                                text = ag.roomTitle,
+                                text = "${ag.roomTitle} • ✓$doneCount",
                                 fontSize = 9.sp,
-                                color = Color.White.copy(alpha = 0.5f)
+                                color = Color.White.copy(alpha = 0.58f)
                             )
                             Text(
                                 text = "${ag.name} • ${ag.role}",
@@ -1950,13 +2050,14 @@ fun AiOfficeLiveDialog(
                         }
                     }
 
+                    // Всплывающий бабл последней переданной задачи
                     Surface(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(horizontal = 24.dp),
+                            .padding(horizontal = 20.dp),
                         shape = RoundedCornerShape(10.dp),
                         color = Color(0xFF0F2620).copy(alpha = 0.94f),
-                        border = BorderStroke(1.dp, senderAgent.accentColor.copy(alpha = 0.7f))
+                        border = BorderStroke(1.dp, senderAgent.accentColor.copy(alpha = 0.75f))
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
@@ -1976,7 +2077,7 @@ fun AiOfficeLiveDialog(
                                 modifier = Modifier.size(11.dp)
                             )
                             Text(
-                                text = "${receiverAgent.name}: ${currentTask.shortBadge}",
+                                text = "${receiverAgent.name}: #${activeDispatch.ticketNumber} ${activeDispatch.badge}",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White
@@ -1985,73 +2086,135 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Поставленные задачи между агентами:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                    )
-
-                    taskHistory.take(3).forEachIndexed { index, task ->
-                        val fromAg = agents[task.fromId]
-                        val toAg = agents[task.toId]
-                        val isLatest = index == 0
-
+                // Быстрый переключатель между 4 агентами
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    agents.forEach { ag ->
+                        val isSel = selectedAgentId == ag.id
+                        val doneCount = agentWorkStates[ag.id]?.completedTasks?.size ?: 0
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isLatest) fromAg.accentColor.copy(alpha = 0.14f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(11.dp))
+                                .clickable { selectedAgentId = ag.id },
+                            shape = RoundedCornerShape(11.dp),
+                            color = if (isSel) ag.accentColor.copy(alpha = 0.2f)
                             else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
                             border = BorderStroke(
-                                width = 1.dp,
-                                color = if (isLatest) fromAg.accentColor.copy(alpha = 0.5f)
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                                width = if (isSel) 1.4.dp else 1.dp,
+                                color = if (isSel) ag.accentColor else ag.accentColor.copy(alpha = 0.25f)
                             )
                         ) {
-                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = fromAg.name,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = fromAg.accentColor
-                                        )
-                                        Text(
-                                            text = " → ",
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                        )
-                                        Text(
-                                            text = toAg.name,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = toAg.accentColor
-                                        )
-                                    }
-                                    Text(
-                                        text = task.timeStr,
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                    )
-                                }
-                                Spacer(Modifier.height(2.dp))
+                            Column(
+                                modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
                                 Text(
-                                    text = task.description,
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
+                                    text = ag.name,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSel) ag.accentColor else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Готово: $doneCount",
+                                    fontSize = 9.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                 )
                             }
                         }
                     }
                 }
 
+                // Карточка выбранного агента: чем занят сейчас и что уже выполнил
+                if (inspectedWork != null) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = inspectedAgent.accentColor.copy(alpha = 0.1f),
+                        border = BorderStroke(1.dp, inspectedAgent.accentColor.copy(alpha = 0.45f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${inspectedAgent.name} (${inspectedAgent.role})",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = inspectedAgent.accentColor
+                                )
+                                Text(
+                                    text = "Задача #${inspectedWork.activeTask.ticketNumber} • ${(inspectedWork.progress * 100).toInt()}%",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = inspectedAgent.accentColor
+                                )
+                            }
+
+                            Text(
+                                text = "В работе: ${inspectedWork.activeTask.title}",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f)
+                            )
+
+                            LinearProgressIndicator(
+                                progress = { inspectedWork.progress.coerceIn(0f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(CircleShape),
+                                color = inspectedAgent.accentColor,
+                                trackColor = inspectedAgent.accentColor.copy(alpha = 0.2f)
+                            )
+
+                            HorizontalDivider(color = inspectedAgent.accentColor.copy(alpha = 0.2f))
+
+                            Text(
+                                text = "Выполненные задачи агента (${inspectedWork.completedTasks.size}):",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            )
+
+                            inspectedWork.completedTasks.take(3).forEach { done ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.Top,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color(0xFF10B981),
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .padding(top = 2.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "#${done.ticketNumber} ${done.resultSummary}",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f)
+                                        )
+                                        Text(
+                                            text = "Выполнено в ${done.completedAt}",
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Кнопка запуска командного сбора новостей
                 Button(
                     onClick = onRunScan,
                     enabled = !isScanning,
@@ -2065,7 +2228,7 @@ fun AiOfficeLiveDialog(
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (isScanning) "Агенты ищут свежие новости..." else "Дать общую задачу: собрать новости",
+                        text = if (isScanning) "Агенты ускоренно закрывают задачи..." else "Ускорить работу: собрать свежие новости",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -2134,7 +2297,7 @@ private fun DrawScope.drawOfficeWorkstationAndPerson(
 
     if (isHighlighted) {
         drawCircle(
-            color = shirtColor.copy(alpha = 0.22f),
+            color = shirtColor.copy(alpha = 0.24f),
             radius = 20.dp.toPx(),
             center = personPos
         )
