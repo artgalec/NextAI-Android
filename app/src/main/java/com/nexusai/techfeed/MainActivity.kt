@@ -68,10 +68,9 @@ data class NewsItem(
         get() = (System.currentTimeMillis() - timestamp) <= 86_400_000L
 }
 
-data class TgChannel(val name: String, val brand: String, val username: String)
-data class RssSite(val name: String, val brand: String, val url: String)
-data class WebPageSource(val name: String, val brand: String, val url: String, val linkRegex: String)
-data class IgProfile(val name: String, val brand: String, val username: String)
+data class TgChannel(val name: String, val defaultBrand: String, val username: String)
+data class RssSite(val name: String, val defaultBrand: String, val platform: String, val url: String)
+data class WebPageSource(val name: String, val defaultBrand: String, val url: String, val linkRegex: String)
 
 object NewsRepository {
     private val client = OkHttpClient.Builder()
@@ -80,7 +79,14 @@ object NewsRepository {
         .followRedirects(true)
         .build()
 
+    // Русскоязычные Telegram-каналы: техно-СМИ, инсайдеры и официальные каналы
     private val tgChannels = listOf(
+        TgChannel("Rozetked", "Общее", "rozetked"),
+        TgChannel("Wylsacom Red", "Общее", "Wylsared"),
+        TgChannel("Mobiltelefon.ru", "Общее", "mobiltelefonru"),
+        TgChannel("Код Дурова", "Общее", "durovscode"),
+        TgChannel("Лысый из МТ", "Общее", "lysyi_iz_mt"),
+        TgChannel("Xiaomishka (инсайды)", "Xiaomi", "xiaomishka"),
         TgChannel("Xiaomi Россия (Official)", "Xiaomi", "xiaomirussia"),
         TgChannel("Xiaomi Community Russia", "Xiaomi", "miui_ru"),
         TgChannel("Samsung Россия (Official)", "Samsung", "Samsung_Russia"),
@@ -88,62 +94,63 @@ object NewsRepository {
         TgChannel("HONOR Россия (Official)", "HONOR", "honor_russia"),
         TgChannel("OPPO Россия (Official)", "OPPO", "opporussia"),
         TgChannel("vivo Россия (Official)", "vivo", "vivorussia"),
-        TgChannel("realme Россия (Official)", "realme", "realme_russia"),
-        TgChannel("Nothing (Official)", "Nothing", "nothing"),
-        TgChannel("Telegram News", "Другое", "telegram")
+        TgChannel("realme Россия (Official)", "realme", "realme_russia")
     )
 
-    private val officialRssSites = listOf(
-        RssSite("Xiaomi Community & Blog", "Xiaomi", "https://blog.mi.com/en/feed/"),
-        RssSite("Samsung Newsroom Global", "Samsung", "https://news.samsung.com/global/feed"),
-        RssSite("Samsung Newsroom Россия", "Samsung", "https://news.samsung.com/ru/feed"),
-        RssSite("Apple Newsroom", "Apple", "https://www.apple.com/newsroom/rss-feed.rss"),
-        RssSite("Google Official Blog", "Google", "https://blog.google/rss/"),
-        RssSite("Huawei News", "Huawei", "https://www.huawei.com/en/rss-feeds/news"),
-        RssSite("OnePlus Community", "OnePlus", "https://community.oneplus.com/rss"),
-        RssSite("Sony Electronics News", "Sony", "https://www.sony.com/en/SonyInfo/News/Press/rss.xml"),
-        RssSite("ASUS Pressroom", "ASUS", "https://press.asus.com/feed/"),
-        RssSite("Lenovo StoryHub", "Lenovo", "https://news.lenovo.com/feed/"),
-        RssSite("NVIDIA Official Blog", "NVIDIA", "https://blogs.nvidia.com/feed/"),
-        RssSite("AMD Newsroom", "AMD", "https://ir.amd.com/news-events/press-releases/rss")
+    // Русскоязычные СМИ, порталы и официальные блоги (RSS)
+    private val rssSites = listOf(
+        RssSite("4PDA", "Общее", "СМИ и блоги", "https://4pda.to/feed/"),
+        RssSite("Rozetked", "Общее", "СМИ и блоги", "https://rozetked.me/rss"),
+        RssSite("iXBT.com", "Общее", "СМИ и блоги", "https://www.ixbt.com/export/news.rss"),
+        RssSite("Trashbox.ru", "Общее", "СМИ и блоги", "https://trashbox.ru/rss/all/"),
+        RssSite("3DNews", "Общее", "СМИ и блоги", "https://3dnews.ru/news/rss/"),
+        RssSite("Ferra.ru", "Общее", "СМИ и блоги", "https://www.ferra.ru/exports/rss.xml"),
+        RssSite("Mobile-Review", "Общее", "СМИ и блоги", "https://mobile-review.com/all/feed/"),
+        RssSite("Wylsacom Media", "Общее", "СМИ и блоги", "https://wylsa.com/feed/"),
+        RssSite("Хабр — Гаджеты и IT", "Общее", "СМИ и блоги", "https://habr.com/ru/rss/flows/develop/articles/?fl=ru"),
+        RssSite("Лайфхакер — Технологии", "Общее", "СМИ и блоги", "https://lifehacker.ru/topics/technology/feed/"),
+        RssSite("Kod.ru", "Общее", "СМИ и блоги", "https://kod.ru/rss/"),
+        RssSite("Samsung Newsroom Россия", "Samsung", "Оф. сайт", "https://news.samsung.com/ru/feed"),
+        RssSite("Xiaomi Global Blog", "Xiaomi", "Оф. сайт", "https://blog.mi.com/en/feed/"),
+        RssSite("Apple Newsroom", "Apple", "Оф. сайт", "https://www.apple.com/newsroom/rss-feed.rss")
     )
 
+    // Русскоязычные официальные разделы новостей без прямого RSS
     private val officialWebPages = listOf(
         WebPageSource("Xiaomi Россия (mi.com/ru)", "Xiaomi", "https://www.mi.com/ru/discover/", """/ru/discover/article\?id=\d+"""),
         WebPageSource("Xiaomi Community (c.mi.com)", "Xiaomi", "https://new.c.mi.com/ru/", """/ru/post/\d+"""),
-        WebPageSource("HONOR Newsroom", "HONOR", "https://www.honor.com/global/news/", """/global/news/[^"#?]+/"""),
-        WebPageSource("OPPO Newsroom", "OPPO", "https://www.oppo.com/en/newsroom/", """/en/newsroom/press/[^"#?]+/"""),
-        WebPageSource("vivo Newsroom", "vivo", "https://www.vivo.com/en/about-vivo/news", """/en/about-vivo/news/[^"#?]+"""),
-        WebPageSource("realme Newsroom", "realme", "https://www.realme.com/global/newsroom", """/global/newsroom/[^"#?]+"""),
-        WebPageSource("Nothing Community", "Nothing", "https://nothing.community/t/news", """/d/\d+-[^"#?]+""")
+        WebPageSource("HONOR Россия", "HONOR", "https://www.honor.com/ru/news/", """/ru/news/[^"#?]+/"""),
+        WebPageSource("Huawei Россия", "Huawei", "https://consumer.huawei.com/ru/community/", """/ru/community/details/[^"#?]+""")
     )
 
-    private val igProfiles = listOf(
-        IgProfile("Xiaomi Россия", "Xiaomi", "xiaomi.russia"),
-        IgProfile("Samsung", "Samsung", "samsung"),
-        IgProfile("Apple", "Apple", "apple"),
-        IgProfile("Google", "Google", "google"),
-        IgProfile("OPPO", "OPPO", "oppo"),
-        IgProfile("OnePlus", "OnePlus", "oneplus"),
-        IgProfile("Huawei Mobile", "Huawei", "huaweimobile"),
-        IgProfile("HONOR Global", "HONOR", "honorglobal"),
-        IgProfile("Nothing", "Nothing", "nothing"),
-        IgProfile("vivo", "vivo", "vivo_global"),
-        IgProfile("realme", "realme", "realmeglobal"),
-        IgProfile("NVIDIA", "NVIDIA", "nvidia")
-    )
-
-    private val rssHubMirrors = listOf(
-        "https://rsshub.app",
-        "https://rsshub.rssforever.com",
-        "https://rsshub.moeyy.cn"
-    )
+    // Автоматическое определение бренда по тексту заголовка и описания
+    private fun detectBrand(text: String, fallback: String): String {
+        if (fallback != "Общее") return fallback
+        val lower = text.lowercase()
+        return when {
+            listOf("xiaomi", "hyperos", "redmi", "poco", "miui", "сяоми").any { it in lower } -> "Xiaomi"
+            listOf("samsung", "galaxy", "one ui", "самсунг").any { it in lower } -> "Samsung"
+            listOf("apple", "iphone", "ios ", "ipad", "macbook", "airpods").any { it in lower } -> "Apple"
+            listOf("google", "pixel", "android ", "gemini").any { it in lower } -> "Google"
+            listOf("huawei", "harmonyos", "mate ", "pura ", "watch fit").any { it in lower } -> "Huawei"
+            listOf("honor", "magic os", "magicos").any { it in lower } -> "HONOR"
+            listOf("oppo", "coloros", "find x", "reno").any { it in lower } -> "OPPO"
+            listOf("oneplus", "oxygenos").any { it in lower } -> "OnePlus"
+            listOf("vivo", "iqoo", "originos").any { it in lower } -> "vivo"
+            listOf("realme", "реалми").any { it in lower } -> "realme"
+            listOf("nothing", "cmf").any { it in lower } -> "Nothing"
+            listOf("nvidia", "geforce", "rtx").any { it in lower } -> "NVIDIA"
+            listOf("amd", "ryzen", "radeon").any { it in lower } -> "AMD"
+            else -> "Общее"
+        }
+    }
 
     private fun fetchUrl(url: String): String? {
         return try {
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36")
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 15; Xiaomi 17T) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36")
+                .header("Accept-Language", "ru-RU,ru;q=0.9,en;q=0.5")
                 .header("Cache-Control", "no-cache")
                 .build()
             client.newCall(request).execute().use { resp ->
@@ -189,9 +196,9 @@ object NewsRepository {
         return System.currentTimeMillis()
     }
 
-    private fun makeSummary(raw: String, maxLen: Int = 210): String {
+    private fun makeSummary(raw: String, maxLen: Int = 220): String {
         val clean = Jsoup.parse(raw).text().replace(Regex("\\s+"), " ").trim()
-        if (clean.isEmpty()) return "Официальная публикация. Нажмите «Открыть источник» для просмотра."
+        if (clean.isEmpty()) return "Нажмите «Открыть источник», чтобы прочитать полную статью."
         return if (clean.length <= maxLen) clean else clean.take(maxLen).substringBeforeLast(" ") + "..."
     }
 
@@ -210,20 +217,22 @@ object NewsRepository {
             val timeAttr = wrap.selectFirst("time[datetime]")?.attr("datetime") ?: continue
             val textEl = wrap.selectFirst("div.tgme_widget_message_text") ?: continue
             val text = textEl.text().replace(Regex("\\s+"), " ").trim()
-            if (text.length < 15) continue
+            if (text.length < 20) continue
 
             val ts = try {
                 Instant.parse(timeAttr).toEpochMilli()
             } catch (_: Exception) {
                 System.currentTimeMillis()
             }
-            val title = if (text.length > 85) text.take(85).substringBeforeLast(" ") + "..." else text
+            val title = if (text.length > 90) text.take(90).substringBeforeLast(" ") + "..." else text
+            val detected = detectBrand(text, ch.defaultBrand)
+
             list.add(
                 NewsItem(
                     id = "tg_$postId",
                     title = title,
                     sourceLabel = ch.name,
-                    brand = ch.brand,
+                    brand = detected,
                     platform = "Telegram",
                     summary = makeSummary(text),
                     url = "https://t.me/$postId",
@@ -241,7 +250,7 @@ object NewsRepository {
         val entries = doc.select("item").ifEmpty { doc.select("entry") }
         val list = mutableListOf<NewsItem>()
 
-        for (entry in entries.take(6)) {
+        for (entry in entries.take(7)) {
             val title = Jsoup.parse(entry.selectFirst("title")?.text() ?: "").text().trim()
             if (title.isBlank()) continue
             val link = entry.selectFirst("link")?.text()?.trim()?.ifBlank {
@@ -256,15 +265,17 @@ object NewsRepository {
                 ?: entry.selectFirst("updated")?.text()
                 ?: entry.selectFirst("published")?.text() ?: ""
             val ts = parseRssDate(dateStr)
+            val summary = makeSummary(desc)
+            val detected = detectBrand("$title $summary", site.defaultBrand)
 
             list.add(
                 NewsItem(
                     id = "rss_${link.hashCode()}",
                     title = title,
                     sourceLabel = site.name,
-                    brand = site.brand,
-                    platform = "Оф. сайт",
-                    summary = makeSummary(desc),
+                    brand = detected,
+                    platform = site.platform,
+                    summary = summary,
                     url = link,
                     timestamp = ts,
                     timeLabel = formatTimestamp(ts)
@@ -293,12 +304,12 @@ object NewsRepository {
                         .trim()
                     title = if (slug.length > 8) slug.replaceFirstChar { it.uppercase() } else "Публикация на ${wp.name}"
                 }
-                val ts = System.currentTimeMillis() - (idx * 20 + 10) * 60_000L
+                val ts = System.currentTimeMillis() - (idx * 25 + 15) * 60_000L
                 NewsItem(
                     id = "web_${absUrl.hashCode()}",
                     title = title.take(95),
                     sourceLabel = wp.name,
-                    brand = wp.brand,
+                    brand = detectBrand(title, wp.defaultBrand),
                     platform = "Оф. сайт",
                     summary = "Официальный материал на портале ${wp.name}. Нажмите «Открыть источник» для чтения.",
                     url = absUrl,
@@ -308,55 +319,11 @@ object NewsRepository {
             }
     }
 
-    private fun fetchInstagram(ig: IgProfile): List<NewsItem> {
-        var xml: String? = null
-        for (mirror in rssHubMirrors) {
-            val resp = fetchUrl("$mirror/instagram/user/${ig.username}")
-            if (resp != null && (resp.contains("<rss") || resp.contains("<feed"))) {
-                xml = resp
-                break
-            }
-        }
-        if (xml == null) return emptyList()
-
-        val doc = Jsoup.parse(xml, "", Parser.xmlParser())
-        val entries = doc.select("item").ifEmpty { doc.select("entry") }
-        val list = mutableListOf<NewsItem>()
-
-        for (entry in entries.take(4)) {
-            val desc = entry.selectFirst("description")?.text() ?: entry.selectFirst("title")?.text() ?: ""
-            val clean = Jsoup.parse(desc).text().replace(Regex("\\s+"), " ").trim()
-                .ifBlank { "Официальный пост @${ig.username}" }
-            val link = entry.selectFirst("link")?.text()?.trim()
-                ?.ifBlank { "https://www.instagram.com/${ig.username}/" }
-                ?: "https://www.instagram.com/${ig.username}/"
-            val dateStr = entry.selectFirst("pubDate")?.text() ?: entry.selectFirst("updated")?.text() ?: ""
-            val ts = parseRssDate(dateStr)
-            val title = if (clean.length > 85) clean.take(85).substringBeforeLast(" ") + "..." else clean
-
-            list.add(
-                NewsItem(
-                    id = "ig_${link.hashCode()}",
-                    title = title,
-                    sourceLabel = ig.name,
-                    brand = ig.brand,
-                    platform = "Instagram",
-                    summary = makeSummary(clean),
-                    url = link,
-                    timestamp = ts,
-                    timeLabel = formatTimestamp(ts)
-                )
-            )
-        }
-        return list
-    }
-
     suspend fun loadAllNews(): List<NewsItem> = coroutineScope {
         val jobs = mutableListOf<Deferred<List<NewsItem>>>()
+        rssSites.forEach { site -> jobs.add(async(Dispatchers.IO) { fetchRss(site) }) }
         tgChannels.forEach { ch -> jobs.add(async(Dispatchers.IO) { fetchTelegram(ch) }) }
-        officialRssSites.forEach { site -> jobs.add(async(Dispatchers.IO) { fetchRss(site) }) }
         officialWebPages.forEach { wp -> jobs.add(async(Dispatchers.IO) { fetchWebPage(wp) }) }
-        igProfiles.forEach { ig -> jobs.add(async(Dispatchers.IO) { fetchInstagram(ig) }) }
 
         val all = jobs.awaitAll().flatten()
         val seenUrls = mutableSetOf<String>()
@@ -368,7 +335,7 @@ object NewsRepository {
 object LocalCache {
     private const val PREFS = "newspulse_ai_prefs"
     private const val KEY_SAVED = "saved_news"
-    private const val KEY_CACHE = "cached_news"
+    private const val KEY_CACHE = "cached_news_ru_v2"
 
     fun saveList(context: Context, key: String, items: List<NewsItem>) {
         val arr = JSONArray()
@@ -476,21 +443,21 @@ fun NewsPulseAppScreen() {
     val brands = listOf(
         "Все", "Xiaomi", "Samsung", "Apple", "Google", "Huawei",
         "HONOR", "OPPO", "OnePlus", "vivo", "realme", "Nothing",
-        "Sony", "ASUS", "Lenovo", "NVIDIA", "AMD"
+        "NVIDIA", "AMD", "Общее"
     )
-    val platforms = listOf("Все", "Оф. сайт", "Telegram", "Instagram")
+    val platforms = listOf("Все", "СМИ и блоги", "Telegram", "Оф. сайт")
 
     fun refreshFeed() {
         if (isLoading) return
         isLoading = true
-        lastUpdatedText = "Сканируем сайты и каналы..."
+        lastUpdatedText = "Собираем новости с порталов и каналов..."
         scope.launch {
             val fresh = NewsRepository.loadAllNews()
             if (fresh.isNotEmpty()) {
                 newsList = fresh
                 LocalCache.setCached(context, fresh)
                 val nowStr = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                lastUpdatedText = "Обновлено в $nowStr • ${fresh.size} материалов"
+                lastUpdatedText = "Обновлено в $nowStr • ${fresh.size} новостей"
             } else {
                 lastUpdatedText = "Не удалось обновить (проверьте сеть)"
             }
@@ -594,7 +561,7 @@ fun NewsPulseAppScreen() {
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Поиск: HyperOS, Xiaomi 17T, Galaxy...", fontSize = 13.sp) },
+                        placeholder = { Text("Поиск: HyperOS, Xiaomi 17T, ИИ, обзоры...", fontSize = 13.sp) },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
@@ -634,7 +601,7 @@ fun NewsPulseAppScreen() {
                             FilterChip(
                                 selected = selectedBrand == brand,
                                 onClick = { selectedBrand = brand },
-                                label = { Text(if (brand == "Все") "Все бренды" else brand, fontSize = 12.sp) }
+                                label = { Text(if (brand == "Все") "Все темы" else brand, fontSize = 12.sp) }
                             )
                         }
                     }
@@ -647,7 +614,7 @@ fun NewsPulseAppScreen() {
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     icon = { Icon(Icons.Outlined.Newspaper, contentDescription = null) },
-                    label = { Text("Свежее") }
+                    label = { Text("Лента") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
@@ -666,7 +633,7 @@ fun NewsPulseAppScreen() {
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (isLoading) "Собираем свежие новости..."
+                    text = if (isLoading) "Загружаем свежие новости..."
                     else if (selectedTab == 1) "В избранном пока пусто"
                     else "Ничего не найдено по выбранному фильтру",
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
@@ -711,8 +678,8 @@ fun NewsCard(
     onToggleSave: () -> Unit
 ) {
     val accentColor = when (item.platform) {
-        "Instagram" -> Color(0xFF34D399)
-        "Оф. сайт" -> Color(0xFF10B981)
+        "СМИ и блоги" -> Color(0xFF10B981)
+        "Оф. сайт" -> Color(0xFF34D399)
         else -> Color(0xFF2DD4BF)
     }
 
@@ -772,7 +739,7 @@ fun NewsCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Краткая суть",
+                            text = "Кратко",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = accentColor
@@ -809,7 +776,7 @@ fun NewsCard(
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
-                    Text("Открыть источник ↗", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Читать полностью ↗", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 FilledTonalIconButton(
                     onClick = onToggleSave,
