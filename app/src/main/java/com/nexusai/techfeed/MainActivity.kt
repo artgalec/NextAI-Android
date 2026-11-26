@@ -9,10 +9,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -26,6 +29,8 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -39,14 +44,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -96,10 +109,10 @@ data class ThemePalette(
 
 data class UserAppSettings(
     val paletteId: String = "emerald",
-    val darkMode: String = "system", // system, light, dark, amoled
-    val cardStyle: String = "outlined", // outlined, filled, compact
-    val cornerRadius: Int = 18, // 12, 18, 26
-    val fontScale: Float = 1.0f, // 0.90f, 1.0f, 1.12f, 1.22f
+    val darkMode: String = "system",
+    val cardStyle: String = "outlined",
+    val cornerRadius: Int = 18,
+    val fontScale: Float = 1.0f,
     val showSummary: Boolean = true
 )
 
@@ -170,6 +183,17 @@ val AppPalettes = listOf(
         bgDark = Color(0xFF14070B),
         surfaceDark = Color(0xFF240E15)
     )
+)
+
+data class AiAgentNode(
+    val id: Int,
+    val name: String,
+    val role: String,
+    val roomTitle: String,
+    val currentTask: String,
+    val accentColor: Color,
+    val rx: Float, // относительная координата X (0..1)
+    val ry: Float  // относительная координата Y (0..1)
 )
 
 data class TgChannel(val name: String, val defaultBrand: String, val username: String)
@@ -820,7 +844,10 @@ fun NewsPulseAppScreen(
                     .padding(top = innerPadding.calculateTopPadding()),
                 bottomPadding = innerPadding.calculateBottomPadding() + 16.dp,
                 settings = settings,
+                newsCount = newsList.size,
+                isLoading = isLoading,
                 onSettingsChange = onSettingsChange,
+                onTriggerScan = { refreshFeed() },
                 onClearCache = {
                     newsList = emptyList()
                     LocalCache.setCached(context, emptyList())
@@ -864,7 +891,6 @@ fun NewsPulseAppScreen(
                                 )
                             }
 
-                            // Единая стилизованная строка поиска без резких рамок
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.surface,
@@ -912,7 +938,6 @@ fun NewsPulseAppScreen(
                                 )
                             }
 
-                            // Ряд фильтров по платформам и свежести (единые чипы без белых рамок)
                             Row(
                                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -931,7 +956,6 @@ fun NewsPulseAppScreen(
                                 }
                             }
 
-                            // Ряд фильтров по брендам (в едином стиле)
                             Row(
                                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1166,9 +1190,23 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     bottomPadding: androidx.compose.ui.unit.Dp,
     settings: UserAppSettings,
+    newsCount: Int,
+    isLoading: Boolean,
     onSettingsChange: (UserAppSettings) -> Unit,
+    onTriggerScan: () -> Unit,
     onClearCache: () -> Unit
 ) {
+    var showAiOfficeDialog by remember { mutableStateOf(false) }
+
+    if (showAiOfficeDialog) {
+        AiOfficeLiveDialog(
+            newsCount = newsCount,
+            isScanning = isLoading,
+            onRunScan = onTriggerScan,
+            onDismiss = { showAiOfficeDialog = false }
+        )
+    }
+
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(
@@ -1188,10 +1226,85 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    "Персонализация тем, шрифта, карточек и ленты новостей",
+                    "Персонализация тем, шрифта, карточек и мониторинг ИИ-офиса",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                 )
+            }
+        }
+
+        // Интерактивный ИИ-Офис
+        item {
+            val primary = MaterialTheme.colorScheme.primary
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable { showAiOfficeDialog = true },
+                shape = RoundedCornerShape(18.dp),
+                color = primary.copy(alpha = 0.12f),
+                border = BorderStroke(1.2.dp, primary.copy(alpha = 0.45f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Hub,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "ИИ-Офис (Live-карта)",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF10B981))
+                                )
+                            }
+                            Text(
+                                "4 агента онлайн • Нажмите, чтобы открыть план офиса",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = primary
+                    ) {
+                        Text(
+                            "Открыть",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -1442,6 +1555,378 @@ fun SettingsScreen(
                     Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Обновить кеш", fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AiOfficeLiveDialog(
+    newsCount: Int,
+    isScanning: Boolean,
+    onRunScan: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    val agents = remember(newsCount, isScanning) {
+        listOf(
+            AiAgentNode(
+                id = 0,
+                name = "Алиса-Парсер",
+                role = "Сканер СМИ и RSS",
+                roomTitle = "Отдел Веб-потоков",
+                currentTask = if (isScanning) "Парсит 4PDA, Rozetked, iXBT и 3DNews..." else "Мониторит 14 техно-порталов в фоновом режиме",
+                accentColor = Color(0xFF10B981),
+                rx = 0.24f,
+                ry = 0.25f
+            ),
+            AiAgentNode(
+                id = 1,
+                name = "Макс-Инсайд",
+                role = "Монитор Telegram",
+                roomTitle = "Сектор Каналов",
+                currentTask = if (isScanning) "Читает посты Rozetked, Wylsacom, Xiaomishka..." else "Отслеживает 14 официальных и инсайдерских каналов",
+                accentColor = Color(0xFF38BDF8),
+                rx = 0.76f,
+                ry = 0.25f
+            ),
+            AiAgentNode(
+                id = 2,
+                name = "Нова-ИИ",
+                role = "Классификатор брендов",
+                roomTitle = "Лаборатория тегов",
+                currentTask = "Разметила $newsCount новостей по 13 брендам без дублей",
+                accentColor = Color(0xFFA78BFA),
+                rx = 0.24f,
+                ry = 0.75f
+            ),
+            AiAgentNode(
+                id = 3,
+                name = "Пульс-Ред",
+                role = "Редактор сводок",
+                roomTitle = "Студия дайджестов",
+                currentTask = "Сформировал краткую суть и подготовил карточки к чтению",
+                accentColor = Color(0xFFFBBF24),
+                rx = 0.76f,
+                ry = 0.75f
+            )
+        )
+    }
+
+    var selectedAgentId by remember { mutableIntStateOf(0) }
+    val activeAgent = agents.first { it.id == selectedAgentId }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "officeAnim")
+    val packetProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "packet"
+    )
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 24.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.2.dp, primary.copy(alpha = 0.35f))
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Шапка окна
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Офис ИИ-агентов",
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF10B981).copy(alpha = 0.18f)
+                            ) {
+                                Text(
+                                    text = if (isScanning) "АКТИВНЫЙ РЕЙД" else "LIVE",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF10B981),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            "Нажмите на любого агента на схеме офиса",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Закрыть")
+                    }
+                }
+
+                // Интерактивная карта офиса
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(270.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xFF071310))
+                        .border(1.dp, primary.copy(alpha = 0.3f), RoundedCornerShape(18.dp))
+                        .pointerInput(Unit) {
+                            detectTapGestures { tapOffset ->
+                                val w = size.width.toFloat()
+                                val h = size.height.toFloat()
+                                val clicked = agents.minByOrNull { ag ->
+                                    val dx = tapOffset.x - ag.rx * w
+                                    val dy = tapOffset.y - ag.ry * h
+                                    dx * dx + dy * dy
+                                }
+                                if (clicked != null) {
+                                    selectedAgentId = clicked.id
+                                }
+                            }
+                        }
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val w = size.width
+                        val h = size.height
+                        val center = Offset(w / 2f, h / 2f)
+
+                        // Сетка пола офиса
+                        val gridStep = 28.dp.toPx()
+                        var gx = gridStep
+                        while (gx < w) {
+                            drawLine(
+                                color = primary.copy(alpha = 0.07f),
+                                start = Offset(gx, 0f),
+                                end = Offset(gx, h),
+                                strokeWidth = 1f
+                            )
+                            gx += gridStep
+                        }
+                        var gy = gridStep
+                        while (gy < h) {
+                            drawLine(
+                                color = primary.copy(alpha = 0.07f),
+                                start = Offset(0f, gy),
+                                end = Offset(w, gy),
+                                strokeWidth = 1f
+                            )
+                            gy += gridStep
+                        }
+
+                        // 4 кабинета-зоны по углам
+                        val roomW = w * 0.41f
+                        val roomH = h * 0.38f
+                        val pad = w * 0.04f
+                        val roomCoords = listOf(
+                            Offset(pad, pad),
+                            Offset(w - pad - roomW, pad),
+                            Offset(pad, h - pad - roomH),
+                            Offset(w - pad - roomW, h - pad - roomH)
+                        )
+
+                        roomCoords.forEachIndexed { idx, topLeft ->
+                            val ag = agents[idx]
+                            val isSel = ag.id == selectedAgentId
+                            drawRoundRect(
+                                color = ag.accentColor.copy(alpha = if (isSel) 0.16f else 0.07f),
+                                topLeft = topLeft,
+                                size = Size(roomW, roomH),
+                                cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx())
+                            )
+                            drawRoundRect(
+                                color = ag.accentColor.copy(alpha = if (isSel) 0.85f else 0.3f),
+                                topLeft = topLeft,
+                                size = Size(roomW, roomH),
+                                cornerRadius = CornerRadius(14.dp.toPx(), 14.dp.toPx()),
+                                style = Stroke(width = if (isSel) 2.dp.toPx() else 1.dp.toPx())
+                            )
+                        }
+
+                        // Линии связи от каждого агента к центральному ядру NewsPulse AI
+                        val dash = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                        agents.forEach { ag ->
+                            val startPos = Offset(ag.rx * w, ag.ry * h)
+                            drawLine(
+                                color = ag.accentColor.copy(alpha = 0.45f),
+                                start = startPos,
+                                end = center,
+                                strokeWidth = 2.dp.toPx(),
+                                pathEffect = dash
+                            )
+
+                            // Бегущий пакет данных к серверу
+                            val px = startPos.x + (center.x - startPos.x) * packetProgress
+                            val py = startPos.y + (center.y - startPos.y) * packetProgress
+                            drawCircle(
+                                color = ag.accentColor,
+                                radius = 4.dp.toPx(),
+                                center = Offset(px, py)
+                            )
+                        }
+
+                        // Центральный серверный хаб NewsPulse AI
+                        drawCircle(
+                            color = primary.copy(alpha = 0.22f),
+                            radius = 28.dp.toPx() * pulseScale,
+                            center = center
+                        )
+                        drawCircle(
+                            color = Color(0xFF0D261F),
+                            radius = 24.dp.toPx(),
+                            center = center
+                        )
+                        drawCircle(
+                            color = primary,
+                            radius = 24.dp.toPx(),
+                            center = center,
+                            style = Stroke(width = 2.dp.toPx())
+                        )
+
+                        // Аватары ИИ-агентов за рабочими столами
+                        agents.forEach { ag ->
+                            val pos = Offset(ag.rx * w, ag.ry * h)
+                            val isSel = ag.id == selectedAgentId
+
+                            if (isSel) {
+                                drawCircle(
+                                    color = ag.accentColor.copy(alpha = 0.28f),
+                                    radius = 22.dp.toPx() * pulseScale,
+                                    center = pos
+                                )
+                            }
+                            drawCircle(
+                                color = ag.accentColor,
+                                radius = 15.dp.toPx(),
+                                center = pos
+                            )
+                            drawCircle(
+                                color = Color(0xFF071310),
+                                radius = 6.dp.toPx(),
+                                center = pos
+                            )
+                        }
+                    }
+
+                    // Подписи кабинетов и агентов поверх схемы
+                    agents.forEach { ag ->
+                        val align = when (ag.id) {
+                            0 -> Alignment.TopStart
+                            1 -> Alignment.TopEnd
+                            2 -> Alignment.BottomStart
+                            else -> Alignment.BottomEnd
+                        }
+                        Column(
+                            modifier = Modifier
+                                .align(align)
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalAlignment = if (ag.id % 2 == 1) Alignment.End else Alignment.Start
+                        ) {
+                            Text(
+                                text = ag.roomTitle,
+                                fontSize = 9.sp,
+                                color = Color.White.copy(alpha = 0.55f)
+                            )
+                            Text(
+                                text = ag.name,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ag.accentColor
+                            )
+                        }
+                    }
+
+                    // Метка центрального хаба
+                    Text(
+                        text = "AI HUB",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = primary,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+
+                // Карточка выбранного агента с текущим статусом
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = activeAgent.accentColor.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, activeAgent.accentColor.copy(alpha = 0.4f))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${activeAgent.name} • ${activeAgent.role}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = activeAgent.accentColor
+                            )
+                            Text(
+                                text = "В сети",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF10B981)
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = activeAgent.currentTask,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f)
+                        )
+                    }
+                }
+
+                // Кнопка запуска командного сбора новостей прямо из офиса
+                Button(
+                    onClick = onRunScan,
+                    enabled = !isScanning,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (isScanning) "Агенты собирают свежие новости..." else "Отправить агентов на сбор новостей",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
