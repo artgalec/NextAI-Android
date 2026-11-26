@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -16,7 +17,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Newspaper
 import androidx.compose.material.icons.outlined.Settings
@@ -229,8 +230,8 @@ data class BrandSearchQuery(val brand: String, val query: String)
 
 object NewsRepository {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(12, TimeUnit.SECONDS)
+        .connectTimeout(11, TimeUnit.SECONDS)
+        .readTimeout(11, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
 
@@ -238,7 +239,6 @@ object NewsRepository {
         TgChannel("Rozetked", "Общее", "rozetked"),
         TgChannel("Wylsacom Red", "Общее", "Wylsared"),
         TgChannel("Mobiltelefon.ru", "Общее", "mobiltelefonru"),
-        TgChannel("Код Дурова", "Общее", "durovscode"),
         TgChannel("Лысый из МТ", "Общее", "lysyi_iz_mt"),
         TgChannel("Xiaomishka (инсайды)", "Xiaomi", "xiaomishka"),
         TgChannel("Xiaomi Россия", "Xiaomi", "xiaomirussia"),
@@ -260,28 +260,32 @@ object NewsRepository {
         RssSite("Ferra.ru", "Общее", "СМИ и блоги", "https://www.ferra.ru/exports/rss.xml"),
         RssSite("Mobile-Review", "Общее", "СМИ и блоги", "https://mobile-review.com/all/feed/"),
         RssSite("Wylsacom Media", "Общее", "СМИ и блоги", "https://wylsa.com/feed/"),
-        RssSite("Хабр — IT и гаджеты", "Общее", "СМИ и блоги", "https://habr.com/ru/rss/flows/develop/articles/?fl=ru"),
-        RssSite("Лайфхакер — Технологии", "Общее", "СМИ и блоги", "https://lifehacker.ru/topics/technology/feed/"),
         RssSite("Kod.ru", "Общее", "СМИ и блоги", "https://kod.ru/rss/"),
         RssSite("Samsung Newsroom RU", "Samsung", "Оф. сайт", "https://news.samsung.com/ru/feed"),
         RssSite("Xiaomi Global Blog", "Xiaomi", "Оф. сайт", "https://blog.mi.com/en/feed/"),
-        RssSite("Apple Newsroom", "Apple", "Оф. сайт", "https://www.apple.com/newsroom/rss-feed.rss")
+        RssSite("Apple Newsroom", "Apple", "Оф. сайт", "https://www.apple.com/newsroom/rss-feed.rss"),
+        // Instagram-ленты брендов через RSS-мосты
+        RssSite("Instagram @xiaomi", "Xiaomi", "Instagram", "https://rsshub.app/instagram/user/xiaomi"),
+        RssSite("Instagram @samsungmobile", "Samsung", "Instagram", "https://rsshub.app/instagram/user/samsungmobile"),
+        RssSite("Instagram @nothing", "Nothing", "Instagram", "https://rsshub.app/instagram/user/nothing"),
+        RssSite("Instagram @huaweimobile", "Huawei", "Instagram", "https://rsshub.app/instagram/user/huaweimobile"),
+        RssSite("Instagram @oppo", "OPPO", "Instagram", "https://rsshub.app/instagram/user/oppo")
     )
 
     private val brandNewsFeeds = listOf(
         BrandSearchQuery("Xiaomi", "Xiaomi OR HyperOS OR Redmi OR POCO"),
-        BrandSearchQuery("Samsung", "Samsung Galaxy OR One UI"),
-        BrandSearchQuery("Apple", "Apple iPhone OR iOS"),
+        BrandSearchQuery("Samsung", "Samsung Galaxy OR One UI OR телевизор Samsung"),
+        BrandSearchQuery("Apple", "Apple iPhone OR MacBook OR iPad"),
         BrandSearchQuery("Google", "Google Pixel OR Android"),
-        BrandSearchQuery("Huawei", "Huawei OR HarmonyOS"),
-        BrandSearchQuery("HONOR", "HONOR смартфон OR MagicOS"),
+        BrandSearchQuery("Huawei", "Huawei OR HarmonyOS OR MateBook OR Watch"),
+        BrandSearchQuery("HONOR", "HONOR смартфон OR MagicBook OR MagicOS"),
         BrandSearchQuery("OPPO", "OPPO смартфон OR ColorOS"),
         BrandSearchQuery("OnePlus", "OnePlus смартфон OR OxygenOS"),
         BrandSearchQuery("vivo", "vivo смартфон OR iQOO"),
-        BrandSearchQuery("realme", "realme смартфон"),
+        BrandSearchQuery("realme", "realme смартфон OR ноутбук"),
         BrandSearchQuery("Nothing", "Nothing Phone OR CMF"),
-        BrandSearchQuery("NVIDIA", "NVIDIA GeForce OR RTX"),
-        BrandSearchQuery("AMD", "AMD Ryzen OR Radeon")
+        BrandSearchQuery("Электроавто", "электромобиль Xiaomi SU7 OR Zeekr OR BYD OR Tesla OR Li Auto"),
+        BrandSearchQuery("Умный дом и ТВ", "умный дом Aqara OR телевизор OLED Mini-LED")
     )
 
     private val officialWebPages = listOf(
@@ -291,6 +295,32 @@ object NewsRepository {
         WebPageSource("Huawei Россия", "Huawei", "https://consumer.huawei.com/ru/community/", """/ru/community/details/[^"#?]+""")
     )
 
+    // Фильтр: оставляем строго технику (смартфоны, ТВ, ноутбуки, ПК, умный дом, электрокары), отбрасываем космос и оффтоп
+    private val bannedTopics = listOf(
+        "космос", "ракета", "роскосмос", "nasa", "spacex", "орбит", "спутник ",
+        "астероид", "телескоп", "галактик", "марс ", "луна ", "лунн", "мкс",
+        "астроном", "космонавт", "звезд", "звёзд", "черная дыра", "чёрная дыра",
+        "гороскоп", "рецепт", "политик", "выборы", "сериал", "фильм ", "трейлер фильма"
+    )
+
+    private val techKeywords = listOf(
+        "смартфон", "телефон", "iphone", "galaxy", "xiaomi", "redmi", "poco",
+        "huawei", "honor", "oppo", "oneplus", "vivo", "realme", "nothing", "pixel",
+        "ноутбук", "macbook", "ultrabook", "планшет", "ipad", "телевизор", "oled",
+        "qled", "mini-led", "монитор", "процессор", "видеокарт", "rtx", "ryzen",
+        "snapdragon", "dimensity", "часы", "watch", "наушник", "buds", "airpods",
+        "умный дом", "пылесос", "роутер", "wi-fi", "аккумулятор", "зарядк",
+        "камера", "дисплей", "экран", "прошивк", "hyperos", "one ui", "android",
+        "ios", "harmonyos", "электромобил", "электрокар", "zeekr", "byd", "tesla",
+        "su7", "yu7", "li auto", "гаджет", "консол", "playstation", "nintendo", "xbox"
+    )
+
+    private fun isPureTechOrGadget(title: String, summary: String): Boolean {
+        val text = "$title $summary".lowercase()
+        if (bannedTopics.any { it in text }) return false
+        return techKeywords.any { it in text }
+    }
+
     private fun detectBrand(text: String, fallback: String): String {
         if (fallback != "Общее") return fallback
         val lower = text.lowercase()
@@ -298,16 +328,16 @@ object NewsRepository {
             listOf("xiaomi", "hyperos", "redmi", "poco", "miui", "сяоми").any { it in lower } -> "Xiaomi"
             listOf("samsung", "galaxy", "one ui", "самсунг").any { it in lower } -> "Samsung"
             listOf("apple", "iphone", "ios ", "ipad", "macbook", "airpods").any { it in lower } -> "Apple"
-            listOf("google", "pixel", "android ", "gemini").any { it in lower } -> "Google"
-            listOf("huawei", "harmonyos", "mate ", "pura ", "watch fit").any { it in lower } -> "Huawei"
-            listOf("honor", "magic os", "magicos").any { it in lower } -> "HONOR"
+            listOf("google", "pixel", "android ").any { it in lower } -> "Google"
+            listOf("huawei", "harmonyos", "mate ", "pura ", "watch fit", "matebook").any { it in lower } -> "Huawei"
+            listOf("honor", "magic os", "magicos", "magicbook").any { it in lower } -> "HONOR"
             listOf("oppo", "coloros", "find x", "reno").any { it in lower } -> "OPPO"
             listOf("oneplus", "oxygenos").any { it in lower } -> "OnePlus"
             listOf("vivo", "iqoo", "originos").any { it in lower } -> "vivo"
             listOf("realme", "реалми").any { it in lower } -> "realme"
             listOf("nothing", "cmf").any { it in lower } -> "Nothing"
-            listOf("nvidia", "geforce", "rtx").any { it in lower } -> "NVIDIA"
-            listOf("amd", "ryzen", "radeon").any { it in lower } -> "AMD"
+            listOf("электромобил", "электрокар", "zeekr", "byd", "tesla", "su7", "yu7", "li auto").any { it in lower } -> "Электроавто"
+            listOf("умный дом", "aqara", "телевизор", "oled", "qled", "mini-led", "пылесос").any { it in lower } -> "Умный дом и ТВ"
             else -> "Общее"
         }
     }
@@ -363,9 +393,9 @@ object NewsRepository {
         return System.currentTimeMillis()
     }
 
-    private fun makeSummary(raw: String, maxLen: Int = 220): String {
+    private fun makeSummary(raw: String, maxLen: Int = 210): String {
         val clean = Jsoup.parse(raw).text().replace(Regex("\\s+"), " ").trim()
-        if (clean.isEmpty()) return "Нажмите «Читать полностью», чтобы открыть статью в источнике."
+        if (clean.isEmpty()) return "Нажмите «Читать полностью», чтобы открыть материал в источнике."
         return if (clean.length <= maxLen) clean else clean.take(maxLen).substringBeforeLast(" ") + "..."
     }
 
@@ -384,14 +414,17 @@ object NewsRepository {
             val timeAttr = wrap.selectFirst("time[datetime]")?.attr("datetime") ?: continue
             val textEl = wrap.selectFirst("div.tgme_widget_message_text") ?: continue
             val text = textEl.text().replace(Regex("\\s+"), " ").trim()
-            if (text.length < 20) continue
+            if (text.length < 22) continue
+
+            val title = if (text.length > 90) text.take(90).substringBeforeLast(" ") + "..." else text
+            val summary = makeSummary(text)
+            if (!isPureTechOrGadget(title, summary)) continue
 
             val ts = try {
                 Instant.parse(timeAttr).toEpochMilli()
             } catch (_: Exception) {
                 System.currentTimeMillis()
             }
-            val title = if (text.length > 90) text.take(90).substringBeforeLast(" ") + "..." else text
             val detected = detectBrand(text, ch.defaultBrand)
 
             list.add(
@@ -401,7 +434,7 @@ object NewsRepository {
                     sourceLabel = ch.name,
                     brand = detected,
                     platform = "Telegram",
-                    summary = makeSummary(text),
+                    summary = summary,
                     url = "https://t.me/$postId",
                     timestamp = ts,
                     timeLabel = formatTimestamp(ts)
@@ -417,7 +450,7 @@ object NewsRepository {
         val entries = doc.select("item").ifEmpty { doc.select("entry") }
         val list = mutableListOf<NewsItem>()
 
-        for (entry in entries.take(7)) {
+        for (entry in entries.take(8)) {
             val title = Jsoup.parse(entry.selectFirst("title")?.text() ?: "").text().trim()
             if (title.isBlank()) continue
             val link = entry.selectFirst("link")?.text()?.trim()?.ifBlank {
@@ -428,11 +461,13 @@ object NewsRepository {
             val desc = entry.selectFirst("description")?.text()
                 ?: entry.selectFirst("summary")?.text()
                 ?: entry.selectFirst("content")?.text() ?: ""
+            val summary = makeSummary(desc)
+            if (!isPureTechOrGadget(title, summary)) continue
+
             val dateStr = entry.selectFirst("pubDate")?.text()
                 ?: entry.selectFirst("updated")?.text()
                 ?: entry.selectFirst("published")?.text() ?: ""
             val ts = parseRssDate(dateStr)
-            val summary = makeSummary(desc)
             val detected = detectBrand("$title $summary", site.defaultBrand)
 
             list.add(
@@ -465,6 +500,9 @@ object NewsRepository {
             if (rawTitle.isBlank()) continue
             val sourceName = item.selectFirst("source")?.text()?.trim()?.ifBlank { "Новости СМИ" } ?: "Новости СМИ"
             val cleanTitle = rawTitle.substringBeforeLast(" - ").trim().ifBlank { rawTitle }
+            val summary = "Материал издания «$sourceName» по теме ${bq.brand}."
+            if (!isPureTechOrGadget(cleanTitle, summary)) continue
+
             val link = item.selectFirst("link")?.text()?.trim() ?: continue
             val dateStr = item.selectFirst("pubDate")?.text() ?: ""
             val ts = parseRssDate(dateStr)
@@ -476,7 +514,7 @@ object NewsRepository {
                     sourceLabel = sourceName,
                     brand = bq.brand,
                     platform = "СМИ и блоги",
-                    summary = "Материал издания «$sourceName» по теме ${bq.brand}. Нажмите «Читать полностью» для перехода к статье.",
+                    summary = summary,
                     url = link,
                     timestamp = ts,
                     timeLabel = formatTimestamp(ts)
@@ -496,7 +534,7 @@ object NewsRepository {
             .filter { (_, absUrl) -> absUrl.isNotBlank() && absUrl != wp.url && regex.containsMatchIn(absUrl) }
             .distinctBy { (_, absUrl) -> absUrl }
             .take(5)
-            .mapIndexed { idx, (a, absUrl) ->
+            .mapIndexedNotNull { idx, (a, absUrl) ->
                 var title = a.text().replace(Regex("\\s+"), " ").trim()
                 if (title.length < 10) {
                     val slug = URI(absUrl).path.trimEnd('/').substringAfterLast('/')
@@ -505,6 +543,9 @@ object NewsRepository {
                         .trim()
                     title = if (slug.length > 8) slug.replaceFirstChar { it.uppercase() } else "Публикация на ${wp.name}"
                 }
+                val summary = "Официальный материал на портале ${wp.name}."
+                if (!isPureTechOrGadget(title, summary)) return@mapIndexedNotNull null
+
                 val ts = System.currentTimeMillis() - (idx * 25 + 15) * 60_000L
                 NewsItem(
                     id = "web_${absUrl.hashCode()}",
@@ -512,7 +553,7 @@ object NewsRepository {
                     sourceLabel = wp.name,
                     brand = detectBrand(title, wp.defaultBrand),
                     platform = "Оф. сайт",
-                    summary = "Официальный материал на портале ${wp.name}. Нажмите «Читать полностью» для просмотра.",
+                    summary = summary,
                     url = absUrl,
                     timestamp = ts,
                     timeLabel = "На сайте"
@@ -540,7 +581,7 @@ object NewsRepository {
 object LocalCache {
     private const val PREFS = "newspulse_ai_prefs"
     private const val KEY_SAVED = "saved_news"
-    private const val KEY_CACHE = "cached_news_ru_v3"
+    private const val KEY_CACHE = "cached_news_ru_v4"
     private const val KEY_SETTINGS = "user_app_settings_v2"
 
     fun saveList(context: Context, key: String, items: List<NewsItem>) {
@@ -711,10 +752,13 @@ fun NewsPulseAppScreen(
     var newsList by remember { mutableStateOf(LocalCache.getCached(context)) }
     var savedList by remember { mutableStateOf(LocalCache.getSaved(context)) }
     var isLoading by remember { mutableStateOf(false) }
-    var lastUpdatedText by remember { mutableStateOf(if (newsList.isNotEmpty()) "Из кеша" else "Загрузка...") }
+    var lastUpdatedText by remember { mutableStateOf(if (newsList.isNotEmpty()) "${newsList.size} новостей о технике" else "Загрузка...") }
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
+    var isSearchExpanded by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
+
     var freshOnly by remember { mutableStateOf(false) }
     var selectedPlatform by remember { mutableStateOf("Все") }
     var selectedBrand by remember { mutableStateOf("Все") }
@@ -722,14 +766,16 @@ fun NewsPulseAppScreen(
     val brands = listOf(
         "Все", "Xiaomi", "Samsung", "Apple", "Google", "Huawei",
         "HONOR", "OPPO", "OnePlus", "vivo", "realme", "Nothing",
-        "NVIDIA", "AMD", "Общее"
+        "Электроавто", "Умный дом и ТВ", "Общее"
     )
-    val platforms = listOf("Все", "СМИ и блоги", "Telegram", "Оф. сайт")
+    val platforms = listOf("Все", "СМИ и блоги", "Telegram", "Instagram", "Оф. сайт")
+
+    val hasActiveFilters = freshOnly || selectedPlatform != "Все" || selectedBrand != "Все"
 
     fun refreshFeed() {
         if (isLoading) return
         isLoading = true
-        lastUpdatedText = "Собираем новости по всем брендам..."
+        lastUpdatedText = "Собираем новости по технике..."
         scope.launch {
             val fresh = NewsRepository.loadAllNews()
             if (fresh.isNotEmpty()) {
@@ -773,6 +819,134 @@ fun NewsPulseAppScreen(
         }
     }
 
+    // Компактная выезжающая панель фильтров (убирает громоздкие блоки с главной страницы)
+    if (showFilterSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showFilterSheet = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Фильтры ленты",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (hasActiveFilters) {
+                        TextButton(onClick = {
+                            freshOnly = false
+                            selectedPlatform = "Все"
+                            selectedBrand = "Все"
+                        }) {
+                            Text("Сбросить всё", fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                // Переключатель свежести
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Только свежие за 24 часа",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Switch(
+                        checked = freshOnly,
+                        onCheckedChange = { freshOnly = it }
+                    )
+                }
+
+                // Источники (Платформы)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Откуда брать новости",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                    )
+                    platforms.chunked(3).forEach { rowPlats ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowPlats.forEach { plat ->
+                                StyledFilterChip(
+                                    label = plat,
+                                    selected = selectedPlatform == plat,
+                                    onClick = { selectedPlatform = plat },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            repeat(3 - rowPlats.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+
+                // Бренды и категории техники
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Бренды и категории техники",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                    )
+                    brands.chunked(3).forEach { rowBrands ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowBrands.forEach { brand ->
+                                val count = brandCounts[brand] ?: 0
+                                val label = if (brand == "Все") "Все ($count)" else "$brand ($count)"
+                                StyledFilterChip(
+                                    label = label,
+                                    selected = selectedBrand == brand,
+                                    onClick = { selectedBrand = brand },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            repeat(3 - rowBrands.size) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = { showFilterSheet = false },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 18.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Text(
+                        "Показать (${displayedItems.size})",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             Column(
@@ -780,77 +954,171 @@ fun NewsPulseAppScreen(
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
                                 MaterialTheme.colorScheme.background
                             )
                         )
                     )
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(9.dp)
+                                    .size(8.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.primary)
                             )
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(7.dp))
                             Text(
                                 "NewsPulse AI",
-                                fontSize = 21.sp,
+                                fontSize = 20.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                         }
+                        val subInfo = buildString {
+                            append(lastUpdatedText)
+                            if (selectedBrand != "Все") append(" • $selectedBrand")
+                            if (selectedPlatform != "Все") append(" • $selectedPlatform")
+                        }
                         Text(
-                            lastUpdatedText,
-                            fontSize = 12.sp,
+                            text = subInfo,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                         )
                     }
 
-                    if (selectedTab != 2) {
-                        Surface(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(14.dp))
-                                .clickable(enabled = !isLoading) { refreshFeed() },
-                            shape = RoundedCornerShape(14.dp),
-                            color = MaterialTheme.colorScheme.primary
+                    if (selectedTab == 0) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            // Компактная кнопка поиска
+                            FilledTonalIconButton(
+                                onClick = {
+                                    isSearchExpanded = !isSearchExpanded
+                                    if (!isSearchExpanded) searchQuery = ""
+                                },
+                                modifier = Modifier.size(38.dp),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(15.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Default.Refresh,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "Обновить",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimary
+                                Icon(
+                                    imageVector = if (isSearchExpanded) Icons.Default.Close else Icons.Default.Search,
+                                    contentDescription = "Поиск",
+                                    tint = if (isSearchExpanded || searchQuery.isNotEmpty()) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
+
+                            // Компактная кнопка фильтров (бренды и источники)
+                            Box {
+                                FilledTonalIconButton(
+                                    onClick = { showFilterSheet = true },
+                                    modifier = Modifier.size(38.dp),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Tune,
+                                        contentDescription = "Фильтры",
+                                        tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                if (hasActiveFilters) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(4.dp)
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.primary)
+                                    )
+                                }
+                            }
+
+                            // Кнопка обновления
+                            Surface(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable(enabled = !isLoading) { refreshFeed() },
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(38.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Refresh,
+                                            contentDescription = "Обновить",
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
+                    }
+                }
+
+                // Выдвижная строка поиска только по нажатию на кнопку лупы
+                AnimatedVisibility(visible = selectedTab == 0 && isSearchExpanded) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+                    ) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(
+                                    "Найти: Xiaomi 17T, OLED ТВ, ноутбук, электрокар...",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
                     }
                 }
             }
@@ -888,130 +1156,23 @@ fun NewsPulseAppScreen(
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
-                    top = 6.dp,
+                    top = 4.dp,
                     bottom = innerPadding.calculateBottomPadding() + 16.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (selectedTab == 0) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                StatPill(
-                                    modifier = Modifier.weight(1f),
-                                    title = "Всего",
-                                    value = "${newsList.size}"
-                                )
-                                StatPill(
-                                    modifier = Modifier.weight(1f),
-                                    title = "За 24ч",
-                                    value = "${newsList.count { it.isFresh24h }}"
-                                )
-                                StatPill(
-                                    modifier = Modifier.weight(1f),
-                                    title = "Избранное",
-                                    value = "${savedList.size}"
-                                )
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
-                            ) {
-                                TextField(
-                                    value = searchQuery,
-                                    onValueChange = { searchQuery = it },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    placeholder = {
-                                        Text(
-                                            "Поиск: HyperOS, Xiaomi 17T, Galaxy, ИИ...",
-                                            fontSize = 13.sp,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Search,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(19.dp)
-                                        )
-                                    },
-                                    trailingIcon = {
-                                        if (searchQuery.isNotEmpty()) {
-                                            IconButton(onClick = { searchQuery = "" }) {
-                                                Icon(
-                                                    Icons.Default.Close,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        }
-                                    },
-                                    singleLine = true,
-                                    colors = TextFieldDefaults.colors(
-                                        focusedContainerColor = Color.Transparent,
-                                        unfocusedContainerColor = Color.Transparent,
-                                        focusedIndicatorColor = Color.Transparent,
-                                        unfocusedIndicatorColor = Color.Transparent,
-                                        disabledIndicatorColor = Color.Transparent
-                                    )
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                StyledFilterChip(
-                                    label = "За 24ч",
-                                    selected = freshOnly,
-                                    onClick = { freshOnly = !freshOnly }
-                                )
-                                platforms.forEach { plat ->
-                                    StyledFilterChip(
-                                        label = plat,
-                                        selected = selectedPlatform == plat,
-                                        onClick = { selectedPlatform = plat }
-                                    )
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                brands.forEach { brand ->
-                                    val count = brandCounts[brand] ?: 0
-                                    val labelText = if (brand == "Все") "Все ($count)" else "$brand ($count)"
-                                    StyledFilterChip(
-                                        label = labelText,
-                                        selected = selectedBrand == brand,
-                                        onClick = { selectedBrand = brand }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
                 if (displayedItems.isEmpty()) {
                     item {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 64.dp),
+                                .padding(vertical = 72.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = if (isLoading) "Загружаем свежие новости по всем брендам..."
+                                text = if (isLoading) "Собираем свежие новости о технике и гаджетах..."
                                 else if (selectedTab == 1) "В избранном пока пусто"
-                                else "По этому фильтру новостей нет — попробуй выбрать платформу «Все»",
+                                else "По выбранным фильтрам новостей нет",
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                                 fontSize = 14.sp
                             )
@@ -1152,7 +1313,7 @@ fun StyledFilterChip(
 ) {
     val primary = MaterialTheme.colorScheme.primary
     val bgColor by animateColorAsState(
-        targetValue = if (selected) primary else MaterialTheme.colorScheme.surface,
+        targetValue = if (selected) primary else MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
         label = "chipBg"
     )
     val textColor by animateColorAsState(
@@ -1170,42 +1331,16 @@ fun StyledFilterChip(
         border = BorderStroke(1.dp, borderColor)
     ) {
         Box(
-            modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = label,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 color = textColor,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
-fun StatPill(modifier: Modifier = Modifier, title: String, value: String) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = value,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = title,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -1252,14 +1387,14 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    "Персонализация тем, шрифта, карточек и наблюдение за ИИ-офисом",
+                    "Персонализация тем, шрифта, карточек и офис из 8 ИИ-агентов",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                 )
             }
         }
 
-        // Интерактивный ИИ-Офис
+        // Интерактивный ИИ-Офис (8 агентов)
         item {
             val primary = MaterialTheme.colorScheme.primary
             Surface(
@@ -1298,7 +1433,7 @@ fun SettingsScreen(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    "ИИ-Офис (Live-карта)",
+                                    "ИИ-Офис (8 агентов)",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -1312,7 +1447,7 @@ fun SettingsScreen(
                                 )
                             }
                             Text(
-                                "4 агента • Активные и выполненные задачи по каждому",
+                                "СМИ, Telegram, Instagram, ТВ, Ноутбуки, Электрокары",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -1598,46 +1733,82 @@ private fun generateFreshAgentTask(
         newsList[(ticketNumber * 3) % newsList.size]
     } else null
 
-    val brandPool = listOf("Xiaomi", "Samsung", "Huawei", "Apple", "HONOR", "OnePlus", "Google", "realme", "NVIDIA", "OPPO")
+    val brandPool = listOf("Xiaomi", "Samsung", "Huawei", "Apple", "HONOR", "OnePlus", "Google", "realme", "Электроавто", "Умный дом и ТВ")
     val brand = sampleNews?.brand?.takeIf { it != "Общее" } ?: brandPool[ticketNumber % brandPool.size]
-    val source = sampleNews?.sourceLabel ?: listOf("4PDA", "Rozetked", "iXBT", "Telegram", "3DNews")[ticketNumber % 5]
-    val headlineHint = sampleNews?.title?.take(44)?.let { "«$it...»" } ?: "свежим анонсам $brand"
+    val source = sampleNews?.sourceLabel ?: listOf("4PDA", "Rozetked", "iXBT", "Telegram", "Instagram")[ticketNumber % 5]
+    val headlineHint = sampleNews?.title?.take(42)?.let { "«$it...»" } ?: "новинкам $brand"
 
     return when (toId) {
         0 -> AgentTaskRecord(
             ticketNumber = ticketNumber,
             fromAgentId = fromId,
             toAgentId = 0,
-            badge = "Парсинг $brand",
-            title = "Просканировать RSS-ленты $source и веб-порталы по теме $brand ($headlineHint)",
-            resultSummary = "Собрано и проверено ${3 + (ticketNumber % 6)} новых заметок из $source по бренду $brand",
+            badge = "СМИ • $brand",
+            title = "Просканировать RSS-ленты $source по смартфонам и гаджетам $brand ($headlineHint)",
+            resultSummary = "Собрано ${3 + (ticketNumber % 5)} свежих статей о технике $brand из $source",
             createdAt = nowStr
         )
         1 -> AgentTaskRecord(
             ticketNumber = ticketNumber,
             fromAgentId = fromId,
             toAgentId = 1,
-            badge = "Инсайд TG • $brand",
-            title = "Проверить посты в Telegram-каналах по $brand и сопоставить с $headlineHint",
-            resultSummary = "Найдено ${2 + (ticketNumber % 5)} свежих публикаций в Telegram без репостов",
+            badge = "TG • $brand",
+            title = "Проверить утечки и посты про смартфоны $brand в Telegram-каналах ($headlineHint)",
+            resultSummary = "Найдено ${2 + (ticketNumber % 4)} эксклюзивных поста в Telegram по теме $brand",
             createdAt = nowStr
         )
         2 -> AgentTaskRecord(
             ticketNumber = ticketNumber,
             fromAgentId = fromId,
             toAgentId = 2,
-            badge = "Фильтр • $brand",
-            title = "Отсеять дубликаты по $brand из $source и присвоить теги материалу $headlineHint",
-            resultSummary = "Удалено ${1 + (ticketNumber % 4)} дублей, разметка тегов для $brand завершена",
+            badge = "Instagram • $brand",
+            title = "Проверить официальные тизеры и рилсы $brand в Instagram по новинке $headlineHint",
+            resultSummary = "Загружены свежие анонсы из Instagram-аккаунта $brand без репостов",
+            createdAt = nowStr
+        )
+        3 -> AgentTaskRecord(
+            ticketNumber = ticketNumber,
+            fromAgentId = fromId,
+            toAgentId = 3,
+            badge = "Электрокары",
+            title = "Собрать новости про электромобили Xiaomi SU7/YU7, Zeekr, BYD и автопилоты",
+            resultSummary = "Отобрано ${2 + (ticketNumber % 3)} новых обзора по электрокарам и батареям",
+            createdAt = nowStr
+        )
+        4 -> AgentTaskRecord(
+            ticketNumber = ticketNumber,
+            fromAgentId = fromId,
+            toAgentId = 4,
+            badge = "ТВ и Дом",
+            title = "Найти анонсы OLED/Mini-LED телевизоров, роботов-пылесосов и устройств умного дома",
+            resultSummary = "Добавлены свежие релизы телевизоров и гаджетов умного дома",
+            createdAt = nowStr
+        )
+        5 -> AgentTaskRecord(
+            ticketNumber = ticketNumber,
+            fromAgentId = fromId,
+            toAgentId = 5,
+            badge = "Ноутбуки и ПК",
+            title = "Проверить релизы ноутбуков MacBook, MateBook, MagicBook и новых видеокарт/процессоров",
+            resultSummary = "Собраны характеристики и цены ${2 + (ticketNumber % 4)} новых ноутбуков",
+            createdAt = nowStr
+        )
+        6 -> AgentTaskRecord(
+            ticketNumber = ticketNumber,
+            fromAgentId = fromId,
+            toAgentId = 6,
+            badge = "Анти-шум",
+            title = "Отфильтровать космос, оффтоп и дубликаты по $brand в материале $headlineHint",
+            resultSummary = "Отсеян нетехнический шум, оставлены только новости о железе и гаджетах",
             createdAt = nowStr
         )
         else -> AgentTaskRecord(
             ticketNumber = ticketNumber,
             fromAgentId = fromId,
-            toAgentId = 3,
+            toAgentId = 7,
             badge = "Сводка • $brand",
-            title = "Составить краткую суть новости $headlineHint для карточки в общей ленте",
-            resultSummary = "Готова краткая выжимка на русском языке и обновлена карточка $brand",
+            title = "Сформировать краткую суть новости $headlineHint для карточки в общей ленте",
+            resultSummary = "Готова краткая выжимка и обновлена карточка $brand в ленте",
             createdAt = nowStr
         )
     }
@@ -1651,73 +1822,42 @@ fun AiOfficeLiveDialog(
     onDismiss: () -> Unit
 ) {
     val primary = MaterialTheme.colorScheme.primary
+
+    // 8 полноценных ИИ-агентов в 2 ряда (по 4 рабочих места)
     val agents = remember {
         listOf(
-            AiAgentNode(
-                id = 0,
-                name = "Алиса",
-                role = "Парсер СМИ",
-                roomTitle = "Отдел Веб-СМИ",
-                accentColor = Color(0xFF10B981),
-                rx = 0.24f,
-                ry = 0.28f,
-                deskAbove = true
-            ),
-            AiAgentNode(
-                id = 1,
-                name = "Макс",
-                role = "Инсайдер TG",
-                roomTitle = "Сектор Telegram",
-                accentColor = Color(0xFF38BDF8),
-                rx = 0.76f,
-                ry = 0.28f,
-                deskAbove = true
-            ),
-            AiAgentNode(
-                id = 2,
-                name = "Нова",
-                role = "Фильтр брендов",
-                roomTitle = "Отдел Аналитики",
-                accentColor = Color(0xFFA78BFA),
-                rx = 0.24f,
-                ry = 0.73f,
-                deskAbove = false
-            ),
-            AiAgentNode(
-                id = 3,
-                name = "Пульс",
-                role = "Редактор сводок",
-                roomTitle = "Студия Дайджестов",
-                accentColor = Color(0xFFFBBF24),
-                rx = 0.76f,
-                ry = 0.73f,
-                deskAbove = false
-            )
+            AiAgentNode(0, "Алиса", "СМИ", "Отдел СМИ", Color(0xFF10B981), 0.14f, 0.25f, true),
+            AiAgentNode(1, "Макс", "Telegram", "Сектор TG", Color(0xFF38BDF8), 0.38f, 0.25f, true),
+            AiAgentNode(2, "Инста", "Instagram", "Сектор IG", Color(0xFFF43F5E), 0.62f, 0.25f, true),
+            AiAgentNode(3, "Авто-ИИ", "Электрокары", "Авто-лаб", Color(0xFF22D3EE), 0.86f, 0.25f, true),
+            AiAgentNode(4, "Дом-Бот", "ТВ и Дом", "Умный дом", Color(0xFFF59E0B), 0.14f, 0.76f, false),
+            AiAgentNode(5, "Ноут-ИИ", "Ноутбуки", "ПК-сектор", Color(0xFF818CF8), 0.38f, 0.76f, false),
+            AiAgentNode(6, "Нова", "Фильтр", "Анти-шум", Color(0xFFA78BFA), 0.62f, 0.76f, false),
+            AiAgentNode(7, "Пульс", "Редактор", "Дайджест", Color(0xFF34D399), 0.86f, 0.76f, false)
         )
     }
 
-    var ticketSeq by remember { mutableIntStateOf(105) }
+    var ticketSeq by remember { mutableIntStateOf(210) }
     var selectedAgentId by remember { mutableIntStateOf(0) }
     var activeDispatch by remember {
         mutableStateOf(
-            generateFreshAgentTask(ticketNumber = 104, fromId = 0, toId = 2, newsList = newsList)
+            generateFreshAgentTask(ticketNumber = 209, fromId = 2, toId = 6, newsList = newsList)
         )
     }
 
-    // Состояние каждого из 4 агентов: текущая задача с прогрессом + история выполненных
     val agentWorkStates = remember {
         mutableStateMapOf<Int, AgentWorkState>().apply {
             agents.forEachIndexed { idx, ag ->
                 val initialDone = generateFreshAgentTask(
-                    ticketNumber = 100 + idx,
-                    fromId = (idx + 3) % 4,
+                    ticketNumber = 200 + idx,
+                    fromId = (idx + 5) % 8,
                     toId = ag.id,
                     newsList = newsList
                 ).copy(completedAt = ZonedDateTime.now().minusMinutes(1).format(DateTimeFormatter.ofPattern("HH:mm:ss")))
 
                 val initialCurrent = generateFreshAgentTask(
-                    ticketNumber = 104 + idx,
-                    fromId = (idx + 1) % 4,
+                    ticketNumber = 208 + idx,
+                    fromId = (idx + 1) % 8,
                     toId = ag.id,
                     newsList = newsList
                 )
@@ -1725,7 +1865,7 @@ fun AiOfficeLiveDialog(
                     ag.id,
                     AgentWorkState(
                         activeTask = initialCurrent,
-                        progress = 0.25f + idx * 0.18f,
+                        progress = 0.15f + (idx * 0.10f),
                         completedTasks = listOf(initialDone)
                     )
                 )
@@ -1733,21 +1873,19 @@ fun AiOfficeLiveDialog(
         }
     }
 
-    // Живой цикл выполнения задач: каждый агент доводит задачу до 100%, закрывает её в "Выполненные" и ставит следующую
     LaunchedEffect(isScanning, newsList.size) {
         while (true) {
-            delay(if (isScanning) 350L else 550L)
-            val stepIncrement = if (isScanning) 0.18f else 0.11f
+            delay(if (isScanning) 320L else 520L)
+            val stepIncrement = if (isScanning) 0.19f else 0.11f
 
-            for (agId in 0..3) {
+            for (agId in 0..7) {
                 val current = agentWorkStates[agId] ?: continue
                 val nextProgress = current.progress + stepIncrement
                 if (nextProgress >= 1.0f) {
                     val finishedTime = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
                     val completedItem = current.activeTask.copy(completedAt = finishedTime)
 
-                    // Агент завершил свою задачу и ставит новое поручение другому коллеге
-                    val nextReceiverId = (agId + 1 + (ticketSeq % 3)) % 4
+                    val nextReceiverId = (agId + 1 + (ticketSeq % 7)) % 8
                     ticketSeq += 1
                     val newAssignedTask = generateFreshAgentTask(
                         ticketNumber = ticketSeq,
@@ -1757,11 +1895,10 @@ fun AiOfficeLiveDialog(
                     )
                     activeDispatch = newAssignedTask
 
-                    // Самому себе агент берёт свежую задачу из очереди
                     ticketSeq += 1
                     val nextSelfTask = generateFreshAgentTask(
                         ticketNumber = ticketSeq,
-                        fromId = (agId + 2) % 4,
+                        fromId = (agId + 3) % 8,
                         toId = agId,
                         newsList = newsList
                     )
@@ -1783,24 +1920,24 @@ fun AiOfficeLiveDialog(
     val inspectedAgent = agents[selectedAgentId]
     val inspectedWork = agentWorkStates[selectedAgentId]
 
-    val infiniteTransition = rememberInfiniteTransition(label = "officeWork")
+    val infiniteTransition = rememberInfiniteTransition(label = "officeWork8")
     val typingPhase by infiniteTransition.animateFloat(
         initialValue = -1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 340, easing = LinearEasing),
+            animation = tween(durationMillis = 320, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "typing"
+        label = "typing8"
     )
     val packetTravel by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "packetTravel"
+        label = "packetTravel8"
     )
 
     Dialog(
@@ -1821,7 +1958,6 @@ fun AiOfficeLiveDialog(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Заголовок окна
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1830,7 +1966,7 @@ fun AiOfficeLiveDialog(
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "Офис ИИ-агентов",
+                                "Офис (8 ИИ-агентов)",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -1841,7 +1977,7 @@ fun AiOfficeLiveDialog(
                                 color = Color(0xFF10B981).copy(alpha = 0.18f)
                             ) {
                                 Text(
-                                    text = if (isScanning) "АВРАЛ • СБОР" else "ВЫПОЛНЯЮТ ЗАДАЧИ",
+                                    text = if (isScanning) "АВРАЛ • 8/8" else "ВСЕ 8 В РАБОТЕ",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFF10B981),
@@ -1850,7 +1986,7 @@ fun AiOfficeLiveDialog(
                             }
                         }
                         Text(
-                            "Нажмите на человечка на карте, чтобы открыть его задачи",
+                            "Нажмите на любого из 8 сотрудников, чтобы увидеть его задачи",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                         )
@@ -1860,11 +1996,11 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Интерактивная схема офиса с мебелью и человечками
+                // Схема офиса с 8 рабочими местами, мебелью и человечками
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(275.dp)
+                        .height(280.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFF0A1412))
                         .border(1.2.dp, primary.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
@@ -1887,7 +2023,7 @@ fun AiOfficeLiveDialog(
                         val w = size.width
                         val h = size.height
 
-                        val tile = 26.dp.toPx()
+                        val tile = 24.dp.toPx()
                         var x = tile
                         while (x < w) {
                             drawLine(Color.White.copy(alpha = 0.04f), Offset(x, 0f), Offset(x, h), 1f)
@@ -1899,72 +2035,45 @@ fun AiOfficeLiveDialog(
                             y += tile
                         }
 
-                        val roomW = w * 0.42f
-                        val roomH = h * 0.39f
-                        val pad = w * 0.035f
-                        val rooms = listOf(
-                            Offset(pad, pad),
-                            Offset(w - pad - roomW, pad),
-                            Offset(pad, h - pad - roomH),
-                            Offset(w - pad - roomW, h - pad - roomH)
-                        )
-
-                        rooms.forEachIndexed { idx, topLeft ->
-                            val ag = agents[idx]
+                        // 8 рабочих зон (2 ряда по 4)
+                        val zoneW = w * 0.22f
+                        val zoneH = h * 0.37f
+                        agents.forEach { ag ->
                             val isSelected = ag.id == selectedAgentId
+                            val topLeft = Offset(ag.rx * w - zoneW / 2f, ag.ry * h - zoneH / 2f)
                             drawRoundRect(
-                                color = ag.accentColor.copy(alpha = if (isSelected) 0.16f else 0.05f),
+                                color = ag.accentColor.copy(alpha = if (isSelected) 0.18f else 0.06f),
                                 topLeft = topLeft,
-                                size = Size(roomW, roomH),
-                                cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                                size = Size(zoneW, zoneH),
+                                cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
                             )
                             drawRoundRect(
-                                color = ag.accentColor.copy(alpha = if (isSelected) 0.85f else 0.25f),
+                                color = ag.accentColor.copy(alpha = if (isSelected) 0.9f else 0.28f),
                                 topLeft = topLeft,
-                                size = Size(roomW, roomH),
-                                cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
-                                style = Stroke(width = if (isSelected) 2.dp.toPx() else 1.5.dp.toPx())
+                                size = Size(zoneW, zoneH),
+                                cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx()),
+                                style = Stroke(width = if (isSelected) 1.8.dp.toPx() else 1.dp.toPx())
                             )
                         }
 
+                        // Центральный коридор: диван и кулер
                         val cx = w / 2f
                         val cy = h / 2f
                         drawRoundRect(
-                            color = primary.copy(alpha = 0.12f),
-                            topLeft = Offset(cx - 42.dp.toPx(), cy - 26.dp.toPx()),
-                            size = Size(84.dp.toPx(), 52.dp.toPx()),
-                            cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
-                        )
-                        drawRoundRect(
-                            color = Color(0xFF1E3A34),
-                            topLeft = Offset(cx - 26.dp.toPx(), cy - 20.dp.toPx()),
-                            size = Size(52.dp.toPx(), 14.dp.toPx()),
-                            cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
-                        )
-                        drawRoundRect(
-                            color = Color(0xFF475569),
-                            topLeft = Offset(cx - 16.dp.toPx(), cy + 2.dp.toPx()),
-                            size = Size(32.dp.toPx(), 12.dp.toPx()),
-                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                        )
-                        drawCircle(
-                            color = Color(0xFF38BDF8).copy(alpha = 0.7f),
-                            radius = 6.dp.toPx(),
-                            center = Offset(cx + 34.dp.toPx(), cy - 8.dp.toPx())
-                        )
-                        drawCircle(
-                            color = Color(0xFF10B981).copy(alpha = 0.75f),
-                            radius = 7.dp.toPx(),
-                            center = Offset(cx - 34.dp.toPx(), cy + 8.dp.toPx())
+                            color = primary.copy(alpha = 0.1f),
+                            topLeft = Offset(cx - 56.dp.toPx(), cy - 16.dp.toPx()),
+                            size = Size(112.dp.toPx(), 32.dp.toPx()),
+                            cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
                         )
 
+                        // Столы, кресла, мониторы и 8 человечков
                         agents.forEach { ag ->
                             val px = ag.rx * w
                             val py = ag.ry * h
                             val isSelected = ag.id == selectedAgentId
-                            val handShift = typingPhase * 2.2.dp.toPx()
+                            val handShift = typingPhase * 1.8.dp.toPx()
 
-                            drawOfficeWorkstationAndPerson(
+                            drawCompactWorkstationAndPerson(
                                 personPos = Offset(px, py),
                                 deskAbove = ag.deskAbove,
                                 shirtColor = ag.accentColor,
@@ -1973,22 +2082,22 @@ fun AiOfficeLiveDialog(
                             )
                         }
 
-                        // Стрелка передачи новой задачи
+                        // Стрелка передачи новой задачи между сотрудниками
                         val start = Offset(senderAgent.rx * w, senderAgent.ry * h)
                         val end = Offset(receiverAgent.rx * w, receiverAgent.ry * h)
                         drawLine(
-                            color = senderAgent.accentColor.copy(alpha = 0.75f),
+                            color = senderAgent.accentColor.copy(alpha = 0.8f),
                             start = start,
                             end = end,
                             strokeWidth = 2.dp.toPx(),
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
                         )
 
                         val angle = atan2(end.y - start.y, end.x - start.x)
-                        val arrowLen = 10.dp.toPx()
+                        val arrowLen = 9.dp.toPx()
                         val tip = Offset(
-                            end.x - 20.dp.toPx() * cos(angle),
-                            end.y - 20.dp.toPx() * sin(angle)
+                            end.x - 16.dp.toPx() * cos(angle),
+                            end.y - 16.dp.toPx() * sin(angle)
                         )
                         val arrowPath = Path().apply {
                             moveTo(tip.x, tip.y)
@@ -2006,61 +2115,59 @@ fun AiOfficeLiveDialog(
 
                         val packetX = start.x + (end.x - start.x) * packetTravel
                         val packetY = start.y + (end.y - start.y) * packetTravel
-                        drawRoundRect(
+                        drawCircle(
                             color = Color.White,
-                            topLeft = Offset(packetX - 7.dp.toPx(), packetY - 5.dp.toPx()),
-                            size = Size(14.dp.toPx(), 10.dp.toPx()),
-                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                            radius = 5.dp.toPx(),
+                            center = Offset(packetX, packetY)
                         )
-                        drawRoundRect(
+                        drawCircle(
                             color = senderAgent.accentColor,
-                            topLeft = Offset(packetX - 7.dp.toPx(), packetY - 5.dp.toPx()),
-                            size = Size(14.dp.toPx(), 10.dp.toPx()),
-                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx()),
-                            style = Stroke(width = 1.5.dp.toPx())
+                            radius = 3.dp.toPx(),
+                            center = Offset(packetX, packetY)
                         )
                     }
 
-                    // Подписи комнат и сотрудников
-                    agents.forEach { ag ->
-                        val align = when (ag.id) {
-                            0 -> Alignment.TopStart
-                            1 -> Alignment.TopEnd
-                            2 -> Alignment.BottomStart
-                            else -> Alignment.BottomEnd
-                        }
-                        val doneCount = agentWorkStates[ag.id]?.completedTasks?.size ?: 0
-                        Column(
-                            modifier = Modifier
-                                .align(align)
-                                .padding(horizontal = 14.dp, vertical = 8.dp),
-                            horizontalAlignment = if (ag.id % 2 == 1) Alignment.End else Alignment.Start
-                        ) {
-                            Text(
-                                text = "${ag.roomTitle} • ✓$doneCount",
-                                fontSize = 9.sp,
-                                color = Color.White.copy(alpha = 0.58f)
-                            )
-                            Text(
-                                text = "${ag.name} • ${ag.role}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ag.accentColor
-                            )
+                    // Подписи имён 8 агентов у каждого стола
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val boxW = maxWidth
+                        val boxH = maxHeight
+                        agents.forEach { ag ->
+                            val offsetX = (boxW * ag.rx) - 34.dp
+                            val offsetY = if (ag.deskAbove) (boxH * ag.ry) + 18.dp else (boxH * ag.ry) - 34.dp
+                            Column(
+                                modifier = Modifier
+                                    .offset(x = offsetX.coerceIn(4.dp, boxW - 72.dp), y = offsetY)
+                                    .width(68.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = ag.name,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = ag.accentColor,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = ag.role,
+                                    fontSize = 8.sp,
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
 
-                    // Всплывающий бабл последней переданной задачи
+                    // Всплывающий бабл последней переданной задачи в центре
                     Surface(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .padding(horizontal = 20.dp),
+                            .padding(horizontal = 16.dp),
                         shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF0F2620).copy(alpha = 0.94f),
+                        color = Color(0xFF0F2620).copy(alpha = 0.95f),
                         border = BorderStroke(1.dp, senderAgent.accentColor.copy(alpha = 0.75f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
@@ -2086,48 +2193,53 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Быстрый переключатель между 4 агентами
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    agents.forEach { ag ->
-                        val isSel = selectedAgentId == ag.id
-                        val doneCount = agentWorkStates[ag.id]?.completedTasks?.size ?: 0
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(11.dp))
-                                .clickable { selectedAgentId = ag.id },
-                            shape = RoundedCornerShape(11.dp),
-                            color = if (isSel) ag.accentColor.copy(alpha = 0.2f)
-                            else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
-                            border = BorderStroke(
-                                width = if (isSel) 1.4.dp else 1.dp,
-                                color = if (isSel) ag.accentColor else ag.accentColor.copy(alpha = 0.25f)
-                            )
+                // Сетка выбора любого из 8 агентов (2 ряда по 4)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    agents.chunked(4).forEach { rowAgents ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = ag.name,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSel) ag.accentColor else MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Готово: $doneCount",
-                                    fontSize = 9.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                )
+                            rowAgents.forEach { ag ->
+                                val isSel = selectedAgentId == ag.id
+                                val doneCount = agentWorkStates[ag.id]?.completedTasks?.size ?: 0
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable { selectedAgentId = ag.id },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isSel) ag.accentColor.copy(alpha = 0.2f)
+                                    else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
+                                    border = BorderStroke(
+                                        width = if (isSel) 1.4.dp else 1.dp,
+                                        color = if (isSel) ag.accentColor else ag.accentColor.copy(alpha = 0.25f)
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(vertical = 5.dp, horizontal = 3.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = ag.name,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSel) ag.accentColor else MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = "✓ $doneCount",
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
-                // Карточка выбранного агента: чем занят сейчас и что уже выполнил
+                // Досье выбранного агента: чем занят сейчас + история выполненных задач
                 if (inspectedWork != null) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
@@ -2144,13 +2256,13 @@ fun AiOfficeLiveDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "${inspectedAgent.name} (${inspectedAgent.role})",
+                                    text = "${inspectedAgent.name} • ${inspectedAgent.role}",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = inspectedAgent.accentColor
                                 )
                                 Text(
-                                    text = "Задача #${inspectedWork.activeTask.ticketNumber} • ${(inspectedWork.progress * 100).toInt()}%",
+                                    text = "#${inspectedWork.activeTask.ticketNumber} • ${(inspectedWork.progress * 100).toInt()}%",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = inspectedAgent.accentColor
@@ -2176,7 +2288,7 @@ fun AiOfficeLiveDialog(
                             HorizontalDivider(color = inspectedAgent.accentColor.copy(alpha = 0.2f))
 
                             Text(
-                                text = "Выполненные задачи агента (${inspectedWork.completedTasks.size}):",
+                                text = "Выполненные задачи (${inspectedWork.completedTasks.size}):",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
@@ -2214,7 +2326,6 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Кнопка запуска командного сбора новостей
                 Button(
                     onClick = onRunScan,
                     enabled = !isScanning,
@@ -2228,7 +2339,7 @@ fun AiOfficeLiveDialog(
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (isScanning) "Агенты ускоренно закрывают задачи..." else "Ускорить работу: собрать свежие новости",
+                        text = if (isScanning) "Все 8 агентов собирают новости..." else "Запустить общий сбор новостей (8 агентов)",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -2238,7 +2349,7 @@ fun AiOfficeLiveDialog(
     }
 }
 
-private fun DrawScope.drawOfficeWorkstationAndPerson(
+private fun DrawScope.drawCompactWorkstationAndPerson(
     personPos: Offset,
     deskAbove: Boolean,
     shirtColor: Color,
@@ -2246,90 +2357,82 @@ private fun DrawScope.drawOfficeWorkstationAndPerson(
     isHighlighted: Boolean
 ) {
     val dir = if (deskAbove) -1f else 1f
-    val deskW = 54.dp.toPx()
-    val deskH = 22.dp.toPx()
-    val deskCenterY = personPos.y + dir * 20.dp.toPx()
+    val deskW = 40.dp.toPx()
+    val deskH = 16.dp.toPx()
+    val deskCenterY = personPos.y + dir * 16.dp.toPx()
 
-    val chairCenterY = personPos.y - dir * 10.dp.toPx()
+    // Кресло
+    val chairCenterY = personPos.y - dir * 8.dp.toPx()
     drawRoundRect(
         color = Color(0xFF334155),
-        topLeft = Offset(personPos.x - 11.dp.toPx(), chairCenterY - 5.dp.toPx()),
-        size = Size(22.dp.toPx(), 10.dp.toPx()),
-        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+        topLeft = Offset(personPos.x - 9.dp.toPx(), chairCenterY - 4.dp.toPx()),
+        size = Size(18.dp.toPx(), 8.dp.toPx()),
+        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
     )
 
+    // Стол
     drawRoundRect(
         color = Color(0xFF1E293B),
         topLeft = Offset(personPos.x - deskW / 2f, deskCenterY - deskH / 2f),
         size = Size(deskW, deskH),
-        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
     )
     drawRoundRect(
         color = Color(0xFF475569),
         topLeft = Offset(personPos.x - deskW / 2f, deskCenterY - deskH / 2f),
         size = Size(deskW, deskH),
-        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
+        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
         style = Stroke(width = 1.dp.toPx())
     )
 
-    val monitorY = deskCenterY + dir * 3.dp.toPx()
-    drawRoundRect(
-        color = Color(0xFF0F172A),
-        topLeft = Offset(personPos.x - 14.dp.toPx(), monitorY - 3.dp.toPx()),
-        size = Size(28.dp.toPx(), 6.dp.toPx()),
-        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
-    )
+    // Монитор
+    val monitorY = deskCenterY + dir * 2.dp.toPx()
     drawLine(
         color = shirtColor,
-        start = Offset(personPos.x - 12.dp.toPx(), monitorY - dir * 3.dp.toPx()),
-        end = Offset(personPos.x + 12.dp.toPx(), monitorY - dir * 3.dp.toPx()),
-        strokeWidth = 2.dp.toPx(),
+        start = Offset(personPos.x - 10.dp.toPx(), monitorY),
+        end = Offset(personPos.x + 10.dp.toPx(), monitorY),
+        strokeWidth = 2.5.dp.toPx(),
         cap = StrokeCap.Round
     )
 
-    val kbY = deskCenterY - dir * 5.dp.toPx()
-    drawRoundRect(
-        color = Color(0xFF64748B),
-        topLeft = Offset(personPos.x - 9.dp.toPx(), kbY - 2.dp.toPx()),
-        size = Size(18.dp.toPx(), 4.dp.toPx()),
-        cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
-    )
+    val kbY = deskCenterY - dir * 4.dp.toPx()
 
     if (isHighlighted) {
         drawCircle(
-            color = shirtColor.copy(alpha = 0.24f),
-            radius = 20.dp.toPx(),
+            color = shirtColor.copy(alpha = 0.25f),
+            radius = 16.dp.toPx(),
             center = personPos
         )
     }
 
+    // Плечи человечка
     drawRoundRect(
         color = shirtColor,
-        topLeft = Offset(personPos.x - 12.dp.toPx(), personPos.y - 6.dp.toPx()),
-        size = Size(24.dp.toPx(), 12.dp.toPx()),
-        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+        topLeft = Offset(personPos.x - 9.dp.toPx(), personPos.y - 5.dp.toPx()),
+        size = Size(18.dp.toPx(), 10.dp.toPx()),
+        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
     )
 
-    val leftHandEnd = Offset(personPos.x - 6.dp.toPx(), kbY + handOffset)
-    val rightHandEnd = Offset(personPos.x + 6.dp.toPx(), kbY - handOffset)
+    // Руки
     drawLine(
         color = Color(0xFFFDE68A),
-        start = Offset(personPos.x - 9.dp.toPx(), personPos.y + dir * 4.dp.toPx()),
-        end = leftHandEnd,
-        strokeWidth = 3.dp.toPx(),
+        start = Offset(personPos.x - 7.dp.toPx(), personPos.y + dir * 3.dp.toPx()),
+        end = Offset(personPos.x - 4.dp.toPx(), kbY + handOffset),
+        strokeWidth = 2.5.dp.toPx(),
         cap = StrokeCap.Round
     )
     drawLine(
         color = Color(0xFFFDE68A),
-        start = Offset(personPos.x + 9.dp.toPx(), personPos.y + dir * 4.dp.toPx()),
-        end = rightHandEnd,
-        strokeWidth = 3.dp.toPx(),
+        start = Offset(personPos.x + 7.dp.toPx(), personPos.y + dir * 3.dp.toPx()),
+        end = Offset(personPos.x + 4.dp.toPx(), kbY - handOffset),
+        strokeWidth = 2.5.dp.toPx(),
         cap = StrokeCap.Round
     )
 
+    // Голова
     drawCircle(
         color = Color(0xFFFDE68A),
-        radius = 6.5.dp.toPx(),
+        radius = 5.5.dp.toPx(),
         center = personPos
     )
     drawArc(
@@ -2337,8 +2440,8 @@ private fun DrawScope.drawOfficeWorkstationAndPerson(
         startAngle = if (deskAbove) 0f else 180f,
         sweepAngle = 180f,
         useCenter = true,
-        topLeft = Offset(personPos.x - 6.5.dp.toPx(), personPos.y - 6.5.dp.toPx()),
-        size = Size(13.dp.toPx(), 13.dp.toPx())
+        topLeft = Offset(personPos.x - 5.5.dp.toPx(), personPos.y - 5.5.dp.toPx()),
+        size = Size(11.dp.toPx(), 11.dp.toPx())
     )
 }
 
@@ -2375,6 +2478,7 @@ fun NewsCard(
     val accentColor = when (item.platform) {
         "СМИ и блоги" -> primary
         "Оф. сайт" -> Color(0xFF10B981)
+        "Instagram" -> Color(0xFFF43F5E)
         else -> Color(0xFF38BDF8)
     }
 
