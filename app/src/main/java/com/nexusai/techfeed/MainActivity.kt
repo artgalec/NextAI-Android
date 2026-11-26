@@ -198,8 +198,8 @@ data class AiAgentNode(
     val role: String,
     val roomTitle: String,
     val accentColor: Color,
-    val rx: Float, // позиция человечка X (0..1)
-    val ry: Float, // позиция человечка Y (0..1)
+    val rx: Float,
+    val ry: Float,
     val deskAbove: Boolean
 )
 
@@ -1657,7 +1657,6 @@ fun AiOfficeLiveDialog(
         )
     }
 
-    // Автоматическая постановка задач между агентами в реальном времени
     LaunchedEffect(isScanning) {
         while (true) {
             delay(if (isScanning) 1800L else 3400L)
@@ -1707,4 +1706,688 @@ fun AiOfficeLiveDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .
+                .padding(horizontal = 12.dp, vertical = 18.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.2.dp, primary.copy(alpha = 0.35f))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Офис ИИ-агентов",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF10B981).copy(alpha = 0.18f)
+                            ) {
+                                Text(
+                                    text = if (isScanning) "АВРАЛ • СБОР" else "РАБОТАЮТ",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF10B981),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            "Нажмите на любого сотрудника, чтобы дать ему поручение",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Закрыть")
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(310.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xFF0A1412))
+                        .border(1.2.dp, primary.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
+                        .pointerInput(Unit) {
+                            detectTapGestures { tap ->
+                                val w = size.width.toFloat()
+                                val h = size.height.toFloat()
+                                val tapped = agents.minByOrNull { ag ->
+                                    val dx = tap.x - ag.rx * w
+                                    val dy = tap.y - ag.ry * h
+                                    dx * dx + dy * dy
+                                }
+                                if (tapped != null) {
+                                    val nextTarget = agents[(tapped.id + 1) % agents.size]
+                                    val manualTask = AgentTaskAssignment(
+                                        id = System.currentTimeMillis(),
+                                        fromId = tapped.id,
+                                        toId = nextTarget.id,
+                                        shortBadge = "Ручной запрос",
+                                        description = "${tapped.name} передал(а) срочную подборку новостей агенту ${nextTarget.name}",
+                                        timeStr = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                                    )
+                                    taskHistory = (listOf(manualTask) + taskHistory).take(4)
+                                }
+                            }
+                        }
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val w = size.width
+                        val h = size.height
+
+                        val tile = 26.dp.toPx()
+                        var x = tile
+                        while (x < w) {
+                            drawLine(Color.White.copy(alpha = 0.04f), Offset(x, 0f), Offset(x, h), 1f)
+                            x += tile
+                        }
+                        var y = tile
+                        while (y < h) {
+                            drawLine(Color.White.copy(alpha = 0.04f), Offset(0f, y), Offset(w, y), 1f)
+                            y += tile
+                        }
+
+                        val roomW = w * 0.42f
+                        val roomH = h * 0.39f
+                        val pad = w * 0.035f
+                        val rooms = listOf(
+                            Offset(pad, pad),
+                            Offset(w - pad - roomW, pad),
+                            Offset(pad, h - pad - roomH),
+                            Offset(w - pad - roomW, h - pad - roomH)
+                        )
+
+                        rooms.forEachIndexed { idx, topLeft ->
+                            val ag = agents[idx]
+                            val isActiveInTask = ag.id == currentTask.fromId || ag.id == currentTask.toId
+                            drawRoundRect(
+                                color = ag.accentColor.copy(alpha = if (isActiveInTask) 0.13f else 0.05f),
+                                topLeft = topLeft,
+                                size = Size(roomW, roomH),
+                                cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                            )
+                            drawRoundRect(
+                                color = ag.accentColor.copy(alpha = if (isActiveInTask) 0.65f else 0.25f),
+                                topLeft = topLeft,
+                                size = Size(roomW, roomH),
+                                cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                                style = Stroke(width = 1.5.dp.toPx())
+                            )
+                        }
+
+                        val cx = w / 2f
+                        val cy = h / 2f
+
+                        drawRoundRect(
+                            color = primary.copy(alpha = 0.12f),
+                            topLeft = Offset(cx - 42.dp.toPx(), cy - 26.dp.toPx()),
+                            size = Size(84.dp.toPx(), 52.dp.toPx()),
+                            cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = Color(0xFF1E3A34),
+                            topLeft = Offset(cx - 26.dp.toPx(), cy - 20.dp.toPx()),
+                            size = Size(52.dp.toPx(), 14.dp.toPx()),
+                            cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = Color(0xFF475569),
+                            topLeft = Offset(cx - 16.dp.toPx(), cy + 2.dp.toPx()),
+                            size = Size(32.dp.toPx(), 12.dp.toPx()),
+                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                        )
+                        drawCircle(
+                            color = Color(0xFF38BDF8).copy(alpha = 0.7f),
+                            radius = 6.dp.toPx(),
+                            center = Offset(cx + 34.dp.toPx(), cy - 8.dp.toPx())
+                        )
+                        drawCircle(
+                            color = Color(0xFF10B981).copy(alpha = 0.75f),
+                            radius = 7.dp.toPx(),
+                            center = Offset(cx - 34.dp.toPx(), cy + 8.dp.toPx())
+                        )
+
+                        agents.forEach { ag ->
+                            val px = ag.rx * w
+                            val py = ag.ry * h
+                            val isBusy = ag.id == currentTask.fromId || ag.id == currentTask.toId
+                            val handShift = if (isBusy) typingPhase * 2.5.dp.toPx() else typingPhase * 0.8.dp.toPx()
+
+                            drawOfficeWorkstationAndPerson(
+                                personPos = Offset(px, py),
+                                deskAbove = ag.deskAbove,
+                                shirtColor = ag.accentColor,
+                                handOffset = handShift,
+                                isHighlighted = isBusy
+                            )
+                        }
+
+                        val start = Offset(senderAgent.rx * w, senderAgent.ry * h)
+                        val end = Offset(receiverAgent.rx * w, receiverAgent.ry * h)
+
+                        drawLine(
+                            color = senderAgent.accentColor.copy(alpha = 0.75f),
+                            start = start,
+                            end = end,
+                            strokeWidth = 2.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                        )
+
+                        val angle = atan2(end.y - start.y, end.x - start.x)
+                        val arrowLen = 10.dp.toPx()
+                        val tip = Offset(
+                            end.x - 20.dp.toPx() * cos(angle),
+                            end.y - 20.dp.toPx() * sin(angle)
+                        )
+                        val arrowPath = Path().apply {
+                            moveTo(tip.x, tip.y)
+                            lineTo(
+                                tip.x - arrowLen * cos(angle - 0.45f),
+                                tip.y - arrowLen * sin(angle - 0.45f)
+                            )
+                            lineTo(
+                                tip.x - arrowLen * cos(angle + 0.45f),
+                                tip.y - arrowLen * sin(angle + 0.45f)
+                            )
+                            close()
+                        }
+                        drawPath(arrowPath, color = senderAgent.accentColor)
+
+                        val packetX = start.x + (end.x - start.x) * packetTravel
+                        val packetY = start.y + (end.y - start.y) * packetTravel
+                        drawRoundRect(
+                            color = Color.White,
+                            topLeft = Offset(packetX - 7.dp.toPx(), packetY - 5.dp.toPx()),
+                            size = Size(14.dp.toPx(), 10.dp.toPx()),
+                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = senderAgent.accentColor,
+                            topLeft = Offset(packetX - 7.dp.toPx(), packetY - 5.dp.toPx()),
+                            size = Size(14.dp.toPx(), 10.dp.toPx()),
+                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx()),
+                            style = Stroke(width = 1.5.dp.toPx())
+                        )
+                    }
+
+                    agents.forEach { ag ->
+                        val align = when (ag.id) {
+                            0 -> Alignment.TopStart
+                            1 -> Alignment.TopEnd
+                            2 -> Alignment.BottomStart
+                            else -> Alignment.BottomEnd
+                        }
+                        Column(
+                            modifier = Modifier
+                                .align(align)
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            horizontalAlignment = if (ag.id % 2 == 1) Alignment.End else Alignment.Start
+                        ) {
+                            Text(
+                                text = ag.roomTitle,
+                                fontSize = 9.sp,
+                                color = Color.White.copy(alpha = 0.5f)
+                            )
+                            Text(
+                                text = "${ag.name} • ${ag.role}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ag.accentColor
+                            )
+                        }
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(horizontal = 24.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF0F2620).copy(alpha = 0.94f),
+                        border = BorderStroke(1.dp, senderAgent.accentColor.copy(alpha = 0.7f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(
+                                text = senderAgent.name,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = senderAgent.accentColor
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowForward,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "${receiverAgent.name}: ${currentTask.shortBadge}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Поставленные задачи между агентами:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+
+                    taskHistory.take(3).forEachIndexed { index, task ->
+                        val fromAg = agents[task.fromId]
+                        val toAg = agents[task.toId]
+                        val isLatest = index == 0
+
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isLatest) fromAg.accentColor.copy(alpha = 0.14f)
+                            else MaterialTheme.colorScheme.background.copy(alpha = 0.65f),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (isLatest) fromAg.accentColor.copy(alpha = 0.5f)
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = fromAg.name,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = fromAg.accentColor
+                                        )
+                                        Text(
+                                            text = " → ",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                        Text(
+                                            text = toAg.name,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = toAg.accentColor
+                                        )
+                                    }
+                                    Text(
+                                        text = task.timeStr,
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = task.description,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = onRunScan,
+                    enabled = !isScanning,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (isScanning) "Агенты ищут свежие новости..." else "Дать общую задачу: собрать новости",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawOfficeWorkstationAndPerson(
+    personPos: Offset,
+    deskAbove: Boolean,
+    shirtColor: Color,
+    handOffset: Float,
+    isHighlighted: Boolean
+) {
+    val dir = if (deskAbove) -1f else 1f
+    val deskW = 54.dp.toPx()
+    val deskH = 22.dp.toPx()
+    val deskCenterY = personPos.y + dir * 20.dp.toPx()
+
+    val chairCenterY = personPos.y - dir * 10.dp.toPx()
+    drawRoundRect(
+        color = Color(0xFF334155),
+        topLeft = Offset(personPos.x - 11.dp.toPx(), chairCenterY - 5.dp.toPx()),
+        size = Size(22.dp.toPx(), 10.dp.toPx()),
+        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+    )
+
+    drawRoundRect(
+        color = Color(0xFF1E293B),
+        topLeft = Offset(personPos.x - deskW / 2f, deskCenterY - deskH / 2f),
+        size = Size(deskW, deskH),
+        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+    )
+    drawRoundRect(
+        color = Color(0xFF475569),
+        topLeft = Offset(personPos.x - deskW / 2f, deskCenterY - deskH / 2f),
+        size = Size(deskW, deskH),
+        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
+        style = Stroke(width = 1.dp.toPx())
+    )
+
+    val monitorY = deskCenterY + dir * 3.dp.toPx()
+    drawRoundRect(
+        color = Color(0xFF0F172A),
+        topLeft = Offset(personPos.x - 14.dp.toPx(), monitorY - 3.dp.toPx()),
+        size = Size(28.dp.toPx(), 6.dp.toPx()),
+        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+    )
+    drawLine(
+        color = shirtColor,
+        start = Offset(personPos.x - 12.dp.toPx(), monitorY - dir * 3.dp.toPx()),
+        end = Offset(personPos.x + 12.dp.toPx(), monitorY - dir * 3.dp.toPx()),
+        strokeWidth = 2.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+
+    val kbY = deskCenterY - dir * 5.dp.toPx()
+    drawRoundRect(
+        color = Color(0xFF64748B),
+        topLeft = Offset(personPos.x - 9.dp.toPx(), kbY - 2.dp.toPx()),
+        size = Size(18.dp.toPx(), 4.dp.toPx()),
+        cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+    )
+
+    if (isHighlighted) {
+        drawCircle(
+            color = shirtColor.copy(alpha = 0.22f),
+            radius = 20.dp.toPx(),
+            center = personPos
+        )
+    }
+
+    drawRoundRect(
+        color = shirtColor,
+        topLeft = Offset(personPos.x - 12.dp.toPx(), personPos.y - 6.dp.toPx()),
+        size = Size(24.dp.toPx(), 12.dp.toPx()),
+        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+    )
+
+    val leftHandEnd = Offset(personPos.x - 6.dp.toPx(), kbY + handOffset)
+    val rightHandEnd = Offset(personPos.x + 6.dp.toPx(), kbY - handOffset)
+    drawLine(
+        color = Color(0xFFFDE68A),
+        start = Offset(personPos.x - 9.dp.toPx(), personPos.y + dir * 4.dp.toPx()),
+        end = leftHandEnd,
+        strokeWidth = 3.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+    drawLine(
+        color = Color(0xFFFDE68A),
+        start = Offset(personPos.x + 9.dp.toPx(), personPos.y + dir * 4.dp.toPx()),
+        end = rightHandEnd,
+        strokeWidth = 3.dp.toPx(),
+        cap = StrokeCap.Round
+    )
+
+    drawCircle(
+        color = Color(0xFFFDE68A),
+        radius = 6.5.dp.toPx(),
+        center = personPos
+    )
+    drawArc(
+        color = Color(0xFF1E293B),
+        startAngle = if (deskAbove) 0f else 180f,
+        sweepAngle = 180f,
+        useCenter = true,
+        topLeft = Offset(personPos.x - 6.5.dp.toPx(), personPos.y - 6.5.dp.toPx()),
+        size = Size(13.dp.toPx(), 13.dp.toPx())
+    )
+}
+
+@Composable
+fun SettingsSectionCard(title: String, content: @Composable () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(12.dp))
+            content()
+        }
+    }
+}
+
+@Composable
+fun NewsCard(
+    item: NewsItem,
+    isSaved: Boolean,
+    settings: UserAppSettings,
+    onOpen: () -> Unit,
+    onShare: () -> Unit,
+    onToggleSave: () -> Unit
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    val accentColor = when (item.platform) {
+        "СМИ и блоги" -> primary
+        "Оф. сайт" -> Color(0xFF10B981)
+        else -> Color(0xFF38BDF8)
+    }
+
+    val shape = RoundedCornerShape(settings.cornerRadius.dp)
+    val cardBorder = if (settings.cardStyle == "outlined") {
+        BorderStroke(1.dp, primary.copy(alpha = 0.22f))
+    } else null
+
+    val cardContainerColor = if (settings.cardStyle == "filled") {
+        primary.copy(alpha = 0.08f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
+    val scale = settings.fontScale
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpen() },
+        shape = shape,
+        border = cardBorder,
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor)
+    ) {
+        Column(modifier = Modifier.padding(if (settings.cardStyle == "compact") 12.dp else 16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = accentColor.copy(alpha = 0.16f)
+                    ) {
+                        Text(
+                            text = "${item.platform} • ${item.sourceLabel}",
+                            color = accentColor,
+                            fontSize = (11 * scale).sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    if (item.isVeryFresh6h) {
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = primary.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "NEW",
+                                color = primary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = item.timeLabel,
+                    fontSize = (11 * scale).sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = item.title,
+                fontSize = (16 * scale).sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = (22 * scale).sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            if (settings.showSummary && settings.cardStyle != "compact") {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape((settings.cornerRadius - 4).coerceAtLeast(8).dp),
+                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.72f)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Суть новости",
+                                fontSize = (11 * scale).sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = accentColor
+                            )
+                            Text(
+                                text = item.brand,
+                                fontSize = (11 * scale).sp,
+                                fontWeight = FontWeight.Bold,
+                                color = primary
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = item.summary,
+                            fontSize = (13 * scale).sp,
+                            lineHeight = (18 * scale).sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = onOpen,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text("Читать полностью ↗", fontSize = (13 * scale).sp, fontWeight = FontWeight.Bold)
+                }
+                FilledTonalIconButton(
+                    onClick = onShare,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Поделиться",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                FilledTonalIconButton(
+                    onClick = onToggleSave,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                        contentDescription = "В избранное",
+                        tint = if (isSaved) primary else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
+
+fun openCustomTab(context: Context, url: String) {
+    try {
+        CustomTabsIntent.Builder()
+            .setShowTitle(true)
+            .build()
+            .launchUrl(context, Uri.parse(url))
+    } catch (_: Exception) {
+    }
+}
+
+fun shareArticle(context: Context, item: NewsItem) {
+    try {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, item.title)
+            putExtra(Intent.EXTRA_TEXT, "${item.title}\n\n${item.url}")
+        }
+        context.startActivity(Intent.createChooser(intent, "Поделиться новостью"))
+    } catch (_: Exception) {
+    }
+}
