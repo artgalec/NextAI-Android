@@ -1,14 +1,17 @@
 package com.nexusai.techfeed
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -20,11 +23,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Newspaper
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,6 +52,7 @@ import org.json.JSONObject
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import java.net.URI
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.ZoneId
@@ -66,11 +74,104 @@ data class NewsItem(
 ) {
     val isFresh24h: Boolean
         get() = (System.currentTimeMillis() - timestamp) <= 86_400_000L
+
+    val isVeryFresh6h: Boolean
+        get() = (System.currentTimeMillis() - timestamp) <= 21_600_000L
 }
+
+data class ThemePalette(
+    val id: String,
+    val name: String,
+    val primaryLight: Color,
+    val primaryDark: Color,
+    val secondaryLight: Color,
+    val secondaryDark: Color,
+    val bgLight: Color,
+    val bgDark: Color,
+    val surfaceDark: Color
+)
+
+data class UserThemeConfig(
+    val paletteId: String = "emerald",
+    val darkMode: String = "system", // system, light, dark, amoled
+    val cardStyle: String = "outlined", // outlined, filled, compact
+    val cornerRadius: Int = 18, // 10, 18, 26
+    val fontScale: Float = 1.0f // 0.92f, 1.0f, 1.12f
+)
+
+val AppPalettes = listOf(
+    ThemePalette(
+        id = "emerald",
+        name = "Изумруд",
+        primaryLight = Color(0xFF059669),
+        primaryDark = Color(0xFF10B981),
+        secondaryLight = Color(0xFFD1FAE5),
+        secondaryDark = Color(0xFF064E3B),
+        bgLight = Color(0xFFF0FDF4),
+        bgDark = Color(0xFF06110E),
+        surfaceDark = Color(0xFF0D1F1A)
+    ),
+    ThemePalette(
+        id = "mint_neon",
+        name = "Мятный неон",
+        primaryLight = Color(0xFF0D9488),
+        primaryDark = Color(0xFF2DD4BF),
+        secondaryLight = Color(0xFFCCFBF1),
+        secondaryDark = Color(0xFF115E59),
+        bgLight = Color(0xFFF0FDFA),
+        bgDark = Color(0xFF041211),
+        surfaceDark = Color(0xFF0B2220)
+    ),
+    ThemePalette(
+        id = "cyber_blue",
+        name = "Кибер-синий",
+        primaryLight = Color(0xFF2563EB),
+        primaryDark = Color(0xFF60A5FA),
+        secondaryLight = Color(0xFFDBEAFE),
+        secondaryDark = Color(0xFF1E3A8A),
+        bgLight = Color(0xFFF8FAFC),
+        bgDark = Color(0xFF070B14),
+        surfaceDark = Color(0xFF0F172A)
+    ),
+    ThemePalette(
+        id = "violet_ai",
+        name = "Фиолетовый AI",
+        primaryLight = Color(0xFF7C3AED),
+        primaryDark = Color(0xFFA78BFA),
+        secondaryLight = Color(0xFFEDE9FE),
+        secondaryDark = Color(0xFF4C1D95),
+        bgLight = Color(0xFFFAF5FF),
+        bgDark = Color(0xFF0D0817),
+        surfaceDark = Color(0xFF19112B)
+    ),
+    ThemePalette(
+        id = "amber_sunset",
+        name = "Янтарный",
+        primaryLight = Color(0xFFD97706),
+        primaryDark = Color(0xFFFBBF24),
+        secondaryLight = Color(0xFFFEF3C7),
+        secondaryDark = Color(0xFF78350F),
+        bgLight = Color(0xFFFFFBEB),
+        bgDark = Color(0xFF140E05),
+        surfaceDark = Color(0xFF24190A)
+    ),
+    ThemePalette(
+        id = "ruby_pulse",
+        name = "Рубиновый",
+        primaryLight = Color(0xFFE11D48),
+        primaryDark = Color(0xFFFB7185),
+        secondaryLight = Color(0xFFFFE4E6),
+        secondaryDark = Color(0xFF881337),
+        bgLight = Color(0xFFFFF1F2),
+        bgDark = Color(0xFF14070B),
+        surfaceDark = Color(0xFF240E15)
+    )
+)
 
 data class TgChannel(val name: String, val defaultBrand: String, val username: String)
 data class RssSite(val name: String, val defaultBrand: String, val platform: String, val url: String)
 data class WebPageSource(val name: String, val defaultBrand: String, val url: String, val linkRegex: String)
+data class BrandSearchQuery(val brand: String, val query: String)
 
 object NewsRepository {
     private val client = OkHttpClient.Builder()
@@ -87,14 +188,14 @@ object NewsRepository {
         TgChannel("Код Дурова", "Общее", "durovscode"),
         TgChannel("Лысый из МТ", "Общее", "lysyi_iz_mt"),
         TgChannel("Xiaomishka (инсайды)", "Xiaomi", "xiaomishka"),
-        TgChannel("Xiaomi Россия (Official)", "Xiaomi", "xiaomirussia"),
-        TgChannel("Xiaomi Community Russia", "Xiaomi", "miui_ru"),
-        TgChannel("Samsung Россия (Official)", "Samsung", "Samsung_Russia"),
-        TgChannel("Huawei Mobile (Official)", "Huawei", "huaweimobilerus"),
-        TgChannel("HONOR Россия (Official)", "HONOR", "honor_russia"),
-        TgChannel("OPPO Россия (Official)", "OPPO", "opporussia"),
-        TgChannel("vivo Россия (Official)", "vivo", "vivorussia"),
-        TgChannel("realme Россия (Official)", "realme", "realme_russia")
+        TgChannel("Xiaomi Россия", "Xiaomi", "xiaomirussia"),
+        TgChannel("Xiaomi Community RU", "Xiaomi", "miui_ru"),
+        TgChannel("Samsung Россия", "Samsung", "Samsung_Russia"),
+        TgChannel("Huawei Mobile RU", "Huawei", "huaweimobilerus"),
+        TgChannel("HONOR Россия", "HONOR", "honor_russia"),
+        TgChannel("OPPO Россия", "OPPO", "opporussia"),
+        TgChannel("vivo Россия", "vivo", "vivorussia"),
+        TgChannel("realme Россия", "realme", "realme_russia")
     )
 
     // Русскоязычные СМИ, порталы и официальные блоги (RSS)
@@ -107,15 +208,32 @@ object NewsRepository {
         RssSite("Ferra.ru", "Общее", "СМИ и блоги", "https://www.ferra.ru/exports/rss.xml"),
         RssSite("Mobile-Review", "Общее", "СМИ и блоги", "https://mobile-review.com/all/feed/"),
         RssSite("Wylsacom Media", "Общее", "СМИ и блоги", "https://wylsa.com/feed/"),
-        RssSite("Хабр — Гаджеты и IT", "Общее", "СМИ и блоги", "https://habr.com/ru/rss/flows/develop/articles/?fl=ru"),
+        RssSite("Хабр — IT и гаджеты", "Общее", "СМИ и блоги", "https://habr.com/ru/rss/flows/develop/articles/?fl=ru"),
         RssSite("Лайфхакер — Технологии", "Общее", "СМИ и блоги", "https://lifehacker.ru/topics/technology/feed/"),
         RssSite("Kod.ru", "Общее", "СМИ и блоги", "https://kod.ru/rss/"),
-        RssSite("Samsung Newsroom Россия", "Samsung", "Оф. сайт", "https://news.samsung.com/ru/feed"),
+        RssSite("Samsung Newsroom RU", "Samsung", "Оф. сайт", "https://news.samsung.com/ru/feed"),
         RssSite("Xiaomi Global Blog", "Xiaomi", "Оф. сайт", "https://blog.mi.com/en/feed/"),
         RssSite("Apple Newsroom", "Apple", "Оф. сайт", "https://www.apple.com/newsroom/rss-feed.rss")
     )
 
-    // Русскоязычные официальные разделы новостей без прямого RSS
+    // Гарантированные русскоязычные подборки по каждому бренду через Google News RSS RU
+    private val brandNewsFeeds = listOf(
+        BrandSearchQuery("Xiaomi", "Xiaomi OR HyperOS OR Redmi OR POCO"),
+        BrandSearchQuery("Samsung", "Samsung Galaxy OR One UI"),
+        BrandSearchQuery("Apple", "Apple iPhone OR iOS"),
+        BrandSearchQuery("Google", "Google Pixel OR Android"),
+        BrandSearchQuery("Huawei", "Huawei OR HarmonyOS"),
+        BrandSearchQuery("HONOR", "HONOR смартфон OR MagicOS"),
+        BrandSearchQuery("OPPO", "OPPO смартфон OR ColorOS"),
+        BrandSearchQuery("OnePlus", "OnePlus смартфон OR OxygenOS"),
+        BrandSearchQuery("vivo", "vivo смартфон OR iQOO"),
+        BrandSearchQuery("realme", "realme смартфон"),
+        BrandSearchQuery("Nothing", "Nothing Phone OR CMF"),
+        BrandSearchQuery("NVIDIA", "NVIDIA GeForce OR RTX"),
+        BrandSearchQuery("AMD", "AMD Ryzen OR Radeon")
+    )
+
+    // Официальные разделы новостей без прямого RSS
     private val officialWebPages = listOf(
         WebPageSource("Xiaomi Россия (mi.com/ru)", "Xiaomi", "https://www.mi.com/ru/discover/", """/ru/discover/article\?id=\d+"""),
         WebPageSource("Xiaomi Community (c.mi.com)", "Xiaomi", "https://new.c.mi.com/ru/", """/ru/post/\d+"""),
@@ -123,7 +241,6 @@ object NewsRepository {
         WebPageSource("Huawei Россия", "Huawei", "https://consumer.huawei.com/ru/community/", """/ru/community/details/[^"#?]+""")
     )
 
-    // Автоматическое определение бренда по тексту заголовка и описания
     private fun detectBrand(text: String, fallback: String): String {
         if (fallback != "Общее") return fallback
         val lower = text.lowercase()
@@ -198,7 +315,7 @@ object NewsRepository {
 
     private fun makeSummary(raw: String, maxLen: Int = 220): String {
         val clean = Jsoup.parse(raw).text().replace(Regex("\\s+"), " ").trim()
-        if (clean.isEmpty()) return "Нажмите «Открыть источник», чтобы прочитать полную статью."
+        if (clean.isEmpty()) return "Нажмите «Читать полностью», чтобы открыть статью в источнике."
         return if (clean.length <= maxLen) clean else clean.take(maxLen).substringBeforeLast(" ") + "..."
     }
 
@@ -285,6 +402,40 @@ object NewsRepository {
         return list
     }
 
+    private fun fetchBrandGoogleNews(bq: BrandSearchQuery): List<NewsItem> {
+        val encoded = URLEncoder.encode(bq.query, "UTF-8")
+        val url = "https://news.google.com/rss/search?q=$encoded&hl=ru&gl=RU&ceid=RU:ru"
+        val xml = fetchUrl(url) ?: return emptyList()
+        val doc = Jsoup.parse(xml, "", Parser.xmlParser())
+        val items = doc.select("item")
+        val list = mutableListOf<NewsItem>()
+
+        for (item in items.take(5)) {
+            val rawTitle = Jsoup.parse(item.selectFirst("title")?.text() ?: "").text().trim()
+            if (rawTitle.isBlank()) continue
+            val sourceName = item.selectFirst("source")?.text()?.trim()?.ifBlank { "Новости СМИ" } ?: "Новости СМИ"
+            val cleanTitle = rawTitle.substringBeforeLast(" - ").trim().ifBlank { rawTitle }
+            val link = item.selectFirst("link")?.text()?.trim() ?: continue
+            val dateStr = item.selectFirst("pubDate")?.text() ?: ""
+            val ts = parseRssDate(dateStr)
+
+            list.add(
+                NewsItem(
+                    id = "gn_${bq.brand}_${link.hashCode()}",
+                    title = cleanTitle,
+                    sourceLabel = sourceName,
+                    brand = bq.brand,
+                    platform = "СМИ и блоги",
+                    summary = "Материал издания «$sourceName» по теме ${bq.brand}. Нажмите «Читать полностью» для перехода к статье.",
+                    url = link,
+                    timestamp = ts,
+                    timeLabel = formatTimestamp(ts)
+                )
+            )
+        }
+        return list
+    }
+
     private fun fetchWebPage(wp: WebPageSource): List<NewsItem> {
         val html = fetchUrl(wp.url) ?: return emptyList()
         val doc = Jsoup.parse(html, wp.url)
@@ -311,7 +462,7 @@ object NewsRepository {
                     sourceLabel = wp.name,
                     brand = detectBrand(title, wp.defaultBrand),
                     platform = "Оф. сайт",
-                    summary = "Официальный материал на портале ${wp.name}. Нажмите «Открыть источник» для чтения.",
+                    summary = "Официальный материал на портале ${wp.name}. Нажмите «Читать полностью» для просмотра.",
                     url = absUrl,
                     timestamp = ts,
                     timeLabel = "На сайте"
@@ -324,18 +475,23 @@ object NewsRepository {
         rssSites.forEach { site -> jobs.add(async(Dispatchers.IO) { fetchRss(site) }) }
         tgChannels.forEach { ch -> jobs.add(async(Dispatchers.IO) { fetchTelegram(ch) }) }
         officialWebPages.forEach { wp -> jobs.add(async(Dispatchers.IO) { fetchWebPage(wp) }) }
+        brandNewsFeeds.forEach { bq -> jobs.add(async(Dispatchers.IO) { fetchBrandGoogleNews(bq) }) }
 
         val all = jobs.awaitAll().flatten()
         val seenUrls = mutableSetOf<String>()
-        all.filter { seenUrls.add(it.url) }
-            .sortedByDescending { it.timestamp }
+        val seenTitles = mutableSetOf<String>()
+        all.filter { item ->
+            val normTitle = item.title.lowercase().take(55)
+            seenUrls.add(item.url) && seenTitles.add(normTitle)
+        }.sortedByDescending { it.timestamp }
     }
 }
 
 object LocalCache {
     private const val PREFS = "newspulse_ai_prefs"
     private const val KEY_SAVED = "saved_news"
-    private const val KEY_CACHE = "cached_news_ru_v2"
+    private const val KEY_CACHE = "cached_news_ru_v3"
+    private const val KEY_THEME = "user_theme_config_v1"
 
     fun saveList(context: Context, key: String, items: List<NewsItem>) {
         val arr = JSONArray()
@@ -381,6 +537,35 @@ object LocalCache {
         }
     }
 
+    fun saveTheme(context: Context, config: UserThemeConfig) {
+        val obj = JSONObject().apply {
+            put("paletteId", config.paletteId)
+            put("darkMode", config.darkMode)
+            put("cardStyle", config.cardStyle)
+            put("cornerRadius", config.cornerRadius)
+            put("fontScale", config.fontScale.toDouble())
+        }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_THEME, obj.toString()).apply()
+    }
+
+    fun loadTheme(context: Context): UserThemeConfig {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_THEME, null) ?: return UserThemeConfig()
+        return try {
+            val o = JSONObject(raw)
+            UserThemeConfig(
+                paletteId = o.optString("paletteId", "emerald"),
+                darkMode = o.optString("darkMode", "system"),
+                cardStyle = o.optString("cardStyle", "outlined"),
+                cornerRadius = o.optInt("cornerRadius", 18),
+                fontScale = o.optDouble("fontScale", 1.0).toFloat()
+            )
+        } catch (_: Exception) {
+            UserThemeConfig()
+        }
+    }
+
     fun getSaved(context: Context) = loadList(context, KEY_SAVED)
     fun setSaved(context: Context, items: List<NewsItem>) = saveList(context, KEY_SAVED, items)
     fun getCached(context: Context) = loadList(context, KEY_CACHE)
@@ -392,32 +577,71 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val dark = isSystemInDarkTheme()
-            val colors = if (dark) {
+            val context = LocalContext.current
+            var themeConfig by remember { mutableStateOf(LocalCache.loadTheme(context)) }
+            val systemDark = isSystemInDarkTheme()
+
+            val isDark = when (themeConfig.darkMode) {
+                "light" -> false
+                "dark", "amoled" -> true
+                else -> systemDark
+            }
+            val isAmoled = themeConfig.darkMode == "amoled"
+            val palette = AppPalettes.find { it.id == themeConfig.paletteId } ?: AppPalettes.first()
+
+            val primaryColor by animateColorAsState(
+                targetValue = if (isDark) palette.primaryDark else palette.primaryLight,
+                label = "primary"
+            )
+            val bgColor by animateColorAsState(
+                targetValue = when {
+                    isAmoled -> Color(0xFF000000)
+                    isDark -> palette.bgDark
+                    else -> palette.bgLight
+                },
+                label = "bg"
+            )
+            val surfaceColor by animateColorAsState(
+                targetValue = when {
+                    isAmoled -> Color(0xFF0A0F0D)
+                    isDark -> palette.surfaceDark
+                    else -> Color.White
+                },
+                label = "surface"
+            )
+
+            val colors = if (isDark) {
                 darkColorScheme(
-                    primary = Color(0xFF10B981),
-                    onPrimary = Color(0xFF022C22),
-                    secondaryContainer = Color(0xFF064E3B),
-                    onSecondaryContainer = Color(0xFFA7F3D0),
-                    background = Color(0xFF06110E),
-                    surface = Color(0xFF0D1F1A),
-                    onBackground = Color(0xFFECFDF5),
-                    onSurface = Color(0xFFECFDF5)
+                    primary = primaryColor,
+                    onPrimary = Color(0xFF031711),
+                    secondaryContainer = palette.secondaryDark,
+                    onSecondaryContainer = Color.White,
+                    background = bgColor,
+                    surface = surfaceColor,
+                    onBackground = Color(0xFFF1F5F9),
+                    onSurface = Color(0xFFF1F5F9)
                 )
             } else {
                 lightColorScheme(
-                    primary = Color(0xFF059669),
+                    primary = primaryColor,
                     onPrimary = Color.White,
-                    secondaryContainer = Color(0xFFD1FAE5),
-                    onSecondaryContainer = Color(0xFF064E3B),
-                    background = Color(0xFFF0FDF4),
-                    surface = Color.White,
-                    onBackground = Color(0xFF062C22),
-                    onSurface = Color(0xFF062C22)
+                    secondaryContainer = palette.secondaryLight,
+                    onSecondaryContainer = Color(0xFF062C22),
+                    background = bgColor,
+                    surface = surfaceColor,
+                    onBackground = Color(0xFF0F172A),
+                    onSurface = Color(0xFF0F172A)
                 )
             }
+
             MaterialTheme(colorScheme = colors) {
-                NewsPulseAppScreen()
+                NewsPulseAppScreen(
+                    themeConfig = themeConfig,
+                    onThemeChange = { updated ->
+                        themeConfig = updated
+                        LocalCache.saveTheme(context, updated)
+                    }
+                )
             }
         }
     }
@@ -425,7 +649,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NewsPulseAppScreen() {
+fun NewsPulseAppScreen(
+    themeConfig: UserThemeConfig,
+    onThemeChange: (UserThemeConfig) -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -450,14 +677,14 @@ fun NewsPulseAppScreen() {
     fun refreshFeed() {
         if (isLoading) return
         isLoading = true
-        lastUpdatedText = "Собираем новости с порталов и каналов..."
+        lastUpdatedText = "Собираем новости по всем брендам..."
         scope.launch {
             val fresh = NewsRepository.loadAllNews()
             if (fresh.isNotEmpty()) {
                 newsList = fresh
                 LocalCache.setCached(context, fresh)
                 val nowStr = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                lastUpdatedText = "Обновлено в $nowStr • ${fresh.size} новостей"
+                lastUpdatedText = "Обновлено в $nowStr • ${fresh.size} материалов"
             } else {
                 lastUpdatedText = "Не удалось обновить (проверьте сеть)"
             }
@@ -467,6 +694,12 @@ fun NewsPulseAppScreen() {
 
     LaunchedEffect(Unit) {
         refreshFeed()
+    }
+
+    val brandCounts = remember(newsList) {
+        brands.associateWith { b ->
+            if (b == "Все") newsList.size else newsList.count { it.brand == b }
+        }
     }
 
     val displayedItems = remember(newsList, savedList, selectedTab, searchQuery, freshOnly, selectedPlatform, selectedBrand) {
@@ -495,7 +728,7 @@ fun NewsPulseAppScreen() {
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
                                 MaterialTheme.colorScheme.background
                             )
                         )
@@ -512,14 +745,14 @@ fun NewsPulseAppScreen() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(9.dp)
+                                    .size(10.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF10B981))
+                                    .background(MaterialTheme.colorScheme.primary)
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 "NewsPulse AI",
-                                fontSize = 21.sp,
+                                fontSize = 22.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
@@ -531,85 +764,38 @@ fun NewsPulseAppScreen() {
                         )
                     }
 
-                    Button(
-                        onClick = { refreshFeed() },
-                        enabled = !isLoading,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        Text("Обновить", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                if (selectedTab == 0) {
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Поиск: HyperOS, Xiaomi 17T, ИИ, обзоры...", fontSize = 13.sp) },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                                }
+                    if (selectedTab != 2) {
+                        Button(
+                            onClick = { refreshFeed() },
+                            enabled = !isLoading,
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp)
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        FilterChip(
-                            selected = freshOnly,
-                            onClick = { freshOnly = !freshOnly },
-                            label = { Text("🔥 За 24ч", fontSize = 12.sp) }
-                        )
-                        platforms.forEach { plat ->
-                            FilterChip(
-                                selected = selectedPlatform == plat,
-                                onClick = { selectedPlatform = plat },
-                                label = { Text(plat, fontSize = 12.sp) }
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        brands.forEach { brand ->
-                            FilterChip(
-                                selected = selectedBrand == brand,
-                                onClick = { selectedBrand = brand },
-                                label = { Text(if (brand == "Все") "Все темы" else brand, fontSize = 12.sp) }
-                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Обновить", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            NavigationBar(
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp
+            ) {
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
@@ -622,50 +808,421 @@ fun NewsPulseAppScreen() {
                     icon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
                     label = { Text("Избранное (${savedList.size})") }
                 )
+                NavigationBarItem(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    icon = {
+                        Icon(
+                            if (selectedTab == 2) Icons.Filled.Palette else Icons.Outlined.Palette,
+                            contentDescription = null
+                        )
+                    },
+                    label = { Text("Темы") }
+                )
             }
         }
     ) { innerPadding ->
-        if (displayedItems.isEmpty()) {
-            Box(
+        if (selectedTab == 2) {
+            ThemesCustomizationScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isLoading) "Загружаем свежие новости..."
-                    else if (selectedTab == 1) "В избранном пока пусто"
-                    else "Ничего не найдено по выбранному фильтру",
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
-                    fontSize = 14.sp
-                )
-            }
+                config = themeConfig,
+                onConfigChange = onThemeChange
+            )
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(displayedItems, key = { it.url }) { item ->
-                    val isSaved = savedList.any { it.url == item.url }
-                    NewsCard(
-                        item = item,
-                        isSaved = isSaved,
-                        onOpen = { openCustomTab(context, item.url) },
-                        onToggleSave = {
-                            val updated = if (isSaved) {
-                                savedList.filterNot { it.url == item.url }
-                            } else {
-                                listOf(item) + savedList
+                if (selectedTab == 0) {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Мини-дашборд статистики
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                StatPill(
+                                    modifier = Modifier.weight(1f),
+                                    title = "Всего",
+                                    value = "${newsList.size}"
+                                )
+                                StatPill(
+                                    modifier = Modifier.weight(1f),
+                                    title = "За 24ч",
+                                    value = "${newsList.count { it.isFresh24h }}"
+                                )
+                                StatPill(
+                                    modifier = Modifier.weight(1f),
+                                    title = "В избранном",
+                                    value = "${savedList.size}"
+                                )
                             }
-                            savedList = updated
-                            LocalCache.setSaved(context, updated)
+
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                placeholder = { Text("Поиск: HyperOS, Xiaomi 17T, Galaxy, ИИ...", fontSize = 13.sp) },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                FilterChip(
+                                    selected = freshOnly,
+                                    onClick = { freshOnly = !freshOnly },
+                                    label = { Text("🔥 За 24ч", fontSize = 12.sp) }
+                                )
+                                platforms.forEach { plat ->
+                                    FilterChip(
+                                        selected = selectedPlatform == plat,
+                                        onClick = { selectedPlatform = plat },
+                                        label = { Text(plat, fontSize = 12.sp) }
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                brands.forEach { brand ->
+                                    val count = brandCounts[brand] ?: 0
+                                    val labelText = if (brand == "Все") "Все ($count)" else "$brand ($count)"
+                                    FilterChip(
+                                        selected = selectedBrand == brand,
+                                        onClick = { selectedBrand = brand },
+                                        label = { Text(labelText, fontSize = 12.sp) }
+                                    )
+                                }
+                            }
                         }
-                    )
+                    }
+                }
+
+                if (displayedItems.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 64.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (isLoading) "Загружаем свежие новости по всем брендам..."
+                                else if (selectedTab == 1) "В избранном пока пусто"
+                                else "По этому фильтру новостей нет — попробуй сбросить платформу «Все»",
+                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                } else {
+                    items(displayedItems, key = { it.url }) { item ->
+                        val isSaved = savedList.any { it.url == item.url }
+                        NewsCard(
+                            item = item,
+                            isSaved = isSaved,
+                            themeConfig = themeConfig,
+                            onOpen = { openCustomTab(context, item.url) },
+                            onShare = { shareArticle(context, item) },
+                            onToggleSave = {
+                                val updated = if (isSaved) {
+                                    savedList.filterNot { it.url == item.url }
+                                } else {
+                                    listOf(item) + savedList
+                                }
+                                savedList = updated
+                                LocalCache.setSaved(context, updated)
+                            }
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun StatPill(modifier: Modifier = Modifier, title: String, value: String) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = value,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = title,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+            )
+        }
+    }
+}
+
+@Composable
+fun ThemesCustomizationScreen(
+    modifier: Modifier = Modifier,
+    config: UserThemeConfig,
+    onConfigChange: (UserThemeConfig) -> Unit
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        item {
+            Column {
+                Text(
+                    "Оформление и темы",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    "Настрой цвета, фон, форму карточек и размер текста под себя",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
+                )
+            }
+        }
+
+        // 1. Режим фона
+        item {
+            ThemeSectionCard(title = "Режим экрана") {
+                val modes = listOf(
+                    "system" to "Системный",
+                    "light" to "Светлый",
+                    "dark" to "Тёмный",
+                    "amoled" to "AMOLED"
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    modes.forEach { (id, label) ->
+                        val selected = config.darkMode == id
+                        FilterChip(
+                            selected = selected,
+                            onClick = { onConfigChange(config.copy(darkMode = id)) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Цветовые палитры
+        item {
+            ThemeSectionCard(title = "Цветовая палитра") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AppPalettes.chunked(2).forEach { rowPalettes ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            rowPalettes.forEach { pal ->
+                                val isSelected = config.paletteId == pal.id
+                                Surface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable { onConfigChange(config.copy(paletteId = pal.id)) },
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+                                    } else {
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0.6f)
+                                    },
+                                    border = BorderStroke(
+                                        width = if (isSelected) 2.dp else 1.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(22.dp)
+                                                    .clip(CircleShape)
+                                                    .background(pal.primaryDark)
+                                                    .border(1.5.dp, Color.White.copy(alpha = 0.5f), CircleShape)
+                                            )
+                                            Spacer(Modifier.width(10.dp))
+                                            Text(
+                                                pal.name,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                            )
+                                        }
+                                        if (isSelected) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Стиль карточек
+        item {
+            ThemeSectionCard(title = "Стиль карточек новостей") {
+                val styles = listOf(
+                    "outlined" to "Контурный",
+                    "filled" to "Мягкая заливка",
+                    "compact" to "Компактный"
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    styles.forEach { (id, label) ->
+                        FilterChip(
+                            selected = config.cardStyle == id,
+                            onClick = { onConfigChange(config.copy(cardStyle = id)) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. Скругление углов
+        item {
+            ThemeSectionCard(title = "Форма углов") {
+                val corners = listOf(
+                    10 to "Строгие (10dp)",
+                    18 to "Современные (18dp)",
+                    26 to "Плавные (26dp)"
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    corners.forEach { (radius, label) ->
+                        FilterChip(
+                            selected = config.cornerRadius == radius,
+                            onClick = { onConfigChange(config.copy(cornerRadius = radius)) },
+                            label = { Text(label, fontSize = 11.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 5. Размер шрифта
+        item {
+            ThemeSectionCard(title = "Размер текста") {
+                val sizes = listOf(
+                    0.92f to "Мелкий",
+                    1.0f to "Стандарт",
+                    1.12f to "Крупный"
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    sizes.forEach { (scale, label) ->
+                        FilterChip(
+                            selected = config.fontScale == scale,
+                            onClick = { onConfigChange(config.copy(fontScale = scale)) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Предпросмотр карточки
+        item {
+            Text(
+                "Предпросмотр карточки",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f)
+            )
+            Spacer(Modifier.height(8.dp))
+            NewsCard(
+                item = NewsItem(
+                    id = "preview",
+                    title = "Xiaomi представила новое поколение интерфейса HyperOS с ИИ-функциями",
+                    sourceLabel = "Rozetked",
+                    brand = "Xiaomi",
+                    platform = "СМИ и блоги",
+                    summary = "Обновление приносит ускоренную анимацию, улучшенную автономность и интеллектуальную сводку новостей.",
+                    url = "https://rozetked.me",
+                    timestamp = System.currentTimeMillis(),
+                    timeLabel = "Только что"
+                ),
+                isSaved = true,
+                themeConfig = config,
+                onOpen = {},
+                onShare = {},
+                onToggleSave = {}
+            )
+        }
+    }
+}
+
+@Composable
+fun ThemeSectionCard(title: String, content: @Composable () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(10.dp))
+            content()
         }
     }
 }
@@ -674,47 +1231,83 @@ fun NewsPulseAppScreen() {
 fun NewsCard(
     item: NewsItem,
     isSaved: Boolean,
+    themeConfig: UserThemeConfig,
     onOpen: () -> Unit,
+    onShare: () -> Unit,
     onToggleSave: () -> Unit
 ) {
+    val primary = MaterialTheme.colorScheme.primary
     val accentColor = when (item.platform) {
-        "СМИ и блоги" -> Color(0xFF10B981)
-        "Оф. сайт" -> Color(0xFF34D399)
-        else -> Color(0xFF2DD4BF)
+        "СМИ и блоги" -> primary
+        "Оф. сайт" -> Color(0xFF10B981)
+        else -> Color(0xFF38BDF8)
     }
+
+    val shape = RoundedCornerShape(themeConfig.cornerRadius.dp)
+    val cardBorder = if (themeConfig.cardStyle == "outlined") {
+        BorderStroke(1.dp, primary.copy(alpha = 0.22f))
+    } else null
+
+    val cardContainerColor = if (themeConfig.cardStyle == "filled") {
+        primary.copy(alpha = 0.08f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
+    val scale = themeConfig.fontScale
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onOpen() },
-        shape = RoundedCornerShape(18.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = shape,
+        border = cardBorder,
+        colors = CardDefaults.cardColors(containerColor = cardContainerColor)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(if (themeConfig.cardStyle == "compact") 12.dp else 16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = accentColor.copy(alpha = 0.16f)
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "${item.platform} • ${item.sourceLabel}",
-                        color = accentColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = accentColor.copy(alpha = 0.16f)
+                    ) {
+                        Text(
+                            text = "${item.platform} • ${item.sourceLabel}",
+                            color = accentColor,
+                            fontSize = (11 * scale).sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    if (item.isVeryFresh6h) {
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = primary.copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "NEW",
+                                color = primary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = item.timeLabel,
-                    fontSize = 11.sp,
+                    fontSize = (11 * scale).sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
@@ -722,42 +1315,44 @@ fun NewsCard(
             Spacer(Modifier.height(10.dp))
             Text(
                 text = item.title,
-                fontSize = 16.sp,
+                fontSize = (16 * scale).sp,
                 fontWeight = FontWeight.Bold,
-                lineHeight = 22.sp,
+                lineHeight = (22 * scale).sp,
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            Spacer(Modifier.height(10.dp))
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.background.copy(alpha = 0.7f)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+            if (themeConfig.cardStyle != "compact") {
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape((themeConfig.cornerRadius - 4).coerceAtLeast(8).dp),
+                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.72f)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Суть новости",
+                                fontSize = (11 * scale).sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = accentColor
+                            )
+                            Text(
+                                text = item.brand,
+                                fontSize = (11 * scale).sp,
+                                fontWeight = FontWeight.Bold,
+                                color = primary
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "Кратко",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = accentColor
-                        )
-                        Text(
-                            text = item.brand,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            text = item.summary,
+                            fontSize = (13 * scale).sp,
+                            lineHeight = (18 * scale).sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = item.summary,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                    )
                 }
             }
 
@@ -772,11 +1367,21 @@ fun NewsCard(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
+                        containerColor = primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     )
                 ) {
-                    Text("Читать полностью ↗", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Читать полностью ↗", fontSize = (13 * scale).sp, fontWeight = FontWeight.Bold)
+                }
+                FilledTonalIconButton(
+                    onClick = onShare,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Поделиться",
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
                 FilledTonalIconButton(
                     onClick = onToggleSave,
@@ -785,7 +1390,7 @@ fun NewsCard(
                     Icon(
                         imageVector = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
                         contentDescription = "В избранное",
-                        tint = if (isSaved) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurface
+                        tint = if (isSaved) primary else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -799,6 +1404,18 @@ fun openCustomTab(context: Context, url: String) {
             .setShowTitle(true)
             .build()
             .launchUrl(context, Uri.parse(url))
+    } catch (_: Exception) {
+    }
+}
+
+fun shareArticle(context: Context, item: NewsItem) {
+    try {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, item.title)
+            putExtra(Intent.EXTRA_TEXT, "${item.title}\n\n${item.url}")
+        }
+        context.startActivity(Intent.createChooser(intent, "Поделиться новостью"))
     } catch (_: Exception) {
     }
 }
