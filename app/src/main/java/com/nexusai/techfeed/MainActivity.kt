@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -29,6 +30,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -204,8 +206,7 @@ object NewsRepository {
         for (wrap in wraps) {
             val msgDiv = wrap.selectFirst("div.tgme_widget_message") ?: continue
             val postId = msgDiv.attr("data-post")
-if (postId.isBlank()) continue
-
+            if (postId.isBlank()) continue
             val timeAttr = wrap.selectFirst("time[datetime]")?.attr("datetime") ?: continue
             val textEl = wrap.selectFirst("div.tgme_widget_message_text") ?: continue
             val text = textEl.text().replace(Regex("\\s+"), " ").trim()
@@ -365,7 +366,7 @@ if (postId.isBlank()) continue
 }
 
 object LocalCache {
-    private const val PREFS = "nexus_ai_prefs"
+    private const val PREFS = "newspulse_ai_prefs"
     private const val KEY_SAVED = "saved_news"
     private const val KEY_CACHE = "cached_news"
 
@@ -427,21 +428,29 @@ class MainActivity : ComponentActivity() {
             val dark = isSystemInDarkTheme()
             val colors = if (dark) {
                 darkColorScheme(
-                    primary = Color(0xFF3B82F6),
-                    background = Color(0xFF090D16),
-                    surface = Color(0xFF131A29),
-                    onBackground = Color(0xFFF1F5F9),
-                    onSurface = Color(0xFFF1F5F9)
+                    primary = Color(0xFF10B981),
+                    onPrimary = Color(0xFF022C22),
+                    secondaryContainer = Color(0xFF064E3B),
+                    onSecondaryContainer = Color(0xFFA7F3D0),
+                    background = Color(0xFF06110E),
+                    surface = Color(0xFF0D1F1A),
+                    onBackground = Color(0xFFECFDF5),
+                    onSurface = Color(0xFFECFDF5)
                 )
             } else {
                 lightColorScheme(
-                    primary = Color(0xFF2563EB),
-                    background = Color(0xFFF8FAFC),
-                    surface = Color.White
+                    primary = Color(0xFF059669),
+                    onPrimary = Color.White,
+                    secondaryContainer = Color(0xFFD1FAE5),
+                    onSecondaryContainer = Color(0xFF064E3B),
+                    background = Color(0xFFF0FDF4),
+                    surface = Color.White,
+                    onBackground = Color(0xFF062C22),
+                    onSurface = Color(0xFF062C22)
                 )
             }
             MaterialTheme(colorScheme = colors) {
-                NexusAppScreen()
+                NewsPulseAppScreen()
             }
         }
     }
@@ -449,7 +458,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NexusAppScreen() {
+fun NewsPulseAppScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -516,7 +525,14 @@ fun NexusAppScreen() {
         topBar = {
             Column(
                 modifier = Modifier
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
@@ -529,14 +545,14 @@ fun NexusAppScreen() {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
+                                    .size(9.dp)
                                     .clip(CircleShape)
                                     .background(Color(0xFF10B981))
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "NexusAI Official",
-                                fontSize = 20.sp,
+                                "NewsPulse AI",
+                                fontSize = 21.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
@@ -544,27 +560,31 @@ fun NexusAppScreen() {
                         Text(
                             lastUpdatedText,
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                         )
                     }
 
                     Button(
                         onClick = { refreshFeed() },
                         enabled = !isLoading,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onPrimary
                             )
                         } else {
                             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         }
                         Spacer(Modifier.width(6.dp))
-                        Text("Обновить", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Обновить", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -649,7 +669,7 @@ fun NexusAppScreen() {
                     text = if (isLoading) "Собираем свежие новости..."
                     else if (selectedTab == 1) "В избранном пока пусто"
                     else "Ничего не найдено по выбранному фильтру",
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                     fontSize = 14.sp
                 )
             }
@@ -691,9 +711,9 @@ fun NewsCard(
     onToggleSave: () -> Unit
 ) {
     val accentColor = when (item.platform) {
-        "Instagram" -> Color(0xFFEC4899)
+        "Instagram" -> Color(0xFF34D399)
         "Оф. сайт" -> Color(0xFF10B981)
-        else -> Color(0xFF38BDF8)
+        else -> Color(0xFF2DD4BF)
     }
 
     Card(
@@ -701,6 +721,7 @@ fun NewsCard(
             .fillMaxWidth()
             .clickable { onOpen() },
         shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -711,7 +732,7 @@ fun NewsCard(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = accentColor.copy(alpha = 0.15f)
+                    color = accentColor.copy(alpha = 0.16f)
                 ) {
                     Text(
                         text = "${item.platform} • ${item.sourceLabel}",
@@ -743,7 +764,7 @@ fun NewsCard(
             Spacer(Modifier.height(10.dp))
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
+                color = MaterialTheme.colorScheme.background.copy(alpha = 0.7f)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(
@@ -782,9 +803,13 @@ fun NewsCard(
                 Button(
                     onClick = onOpen,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
                 ) {
-                    Text("Открыть источник ↗", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Открыть источник ↗", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 FilledTonalIconButton(
                     onClick = onToggleSave,
@@ -793,7 +818,7 @@ fun NewsCard(
                     Icon(
                         imageVector = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
                         contentDescription = "В избранное",
-                        tint = if (isSaved) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurface
+                        tint = if (isSaved) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
