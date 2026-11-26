@@ -25,20 +25,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Newspaper
-import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,12 +94,13 @@ data class ThemePalette(
     val surfaceDark: Color
 )
 
-data class UserThemeConfig(
+data class UserAppSettings(
     val paletteId: String = "emerald",
     val darkMode: String = "system", // system, light, dark, amoled
     val cardStyle: String = "outlined", // outlined, filled, compact
-    val cornerRadius: Int = 18, // 10, 18, 26
-    val fontScale: Float = 1.0f // 0.92f, 1.0f, 1.12f
+    val cornerRadius: Int = 18, // 12, 18, 26
+    val fontScale: Float = 1.0f, // 0.90f, 1.0f, 1.12f, 1.22f
+    val showSummary: Boolean = true
 )
 
 val AppPalettes = listOf(
@@ -180,7 +184,6 @@ object NewsRepository {
         .followRedirects(true)
         .build()
 
-    // Русскоязычные Telegram-каналы: техно-СМИ, инсайдеры и официальные каналы
     private val tgChannels = listOf(
         TgChannel("Rozetked", "Общее", "rozetked"),
         TgChannel("Wylsacom Red", "Общее", "Wylsared"),
@@ -198,7 +201,6 @@ object NewsRepository {
         TgChannel("realme Россия", "realme", "realme_russia")
     )
 
-    // Русскоязычные СМИ, порталы и официальные блоги (RSS)
     private val rssSites = listOf(
         RssSite("4PDA", "Общее", "СМИ и блоги", "https://4pda.to/feed/"),
         RssSite("Rozetked", "Общее", "СМИ и блоги", "https://rozetked.me/rss"),
@@ -216,7 +218,6 @@ object NewsRepository {
         RssSite("Apple Newsroom", "Apple", "Оф. сайт", "https://www.apple.com/newsroom/rss-feed.rss")
     )
 
-    // Гарантированные русскоязычные подборки по каждому бренду через Google News RSS RU
     private val brandNewsFeeds = listOf(
         BrandSearchQuery("Xiaomi", "Xiaomi OR HyperOS OR Redmi OR POCO"),
         BrandSearchQuery("Samsung", "Samsung Galaxy OR One UI"),
@@ -233,7 +234,6 @@ object NewsRepository {
         BrandSearchQuery("AMD", "AMD Ryzen OR Radeon")
     )
 
-    // Официальные разделы новостей без прямого RSS
     private val officialWebPages = listOf(
         WebPageSource("Xiaomi Россия (mi.com/ru)", "Xiaomi", "https://www.mi.com/ru/discover/", """/ru/discover/article\?id=\d+"""),
         WebPageSource("Xiaomi Community (c.mi.com)", "Xiaomi", "https://new.c.mi.com/ru/", """/ru/post/\d+"""),
@@ -491,7 +491,7 @@ object LocalCache {
     private const val PREFS = "newspulse_ai_prefs"
     private const val KEY_SAVED = "saved_news"
     private const val KEY_CACHE = "cached_news_ru_v3"
-    private const val KEY_THEME = "user_theme_config_v1"
+    private const val KEY_SETTINGS = "user_app_settings_v2"
 
     fun saveList(context: Context, key: String, items: List<NewsItem>) {
         val arr = JSONArray()
@@ -537,32 +537,34 @@ object LocalCache {
         }
     }
 
-    fun saveTheme(context: Context, config: UserThemeConfig) {
+    fun saveSettings(context: Context, config: UserAppSettings) {
         val obj = JSONObject().apply {
             put("paletteId", config.paletteId)
             put("darkMode", config.darkMode)
             put("cardStyle", config.cardStyle)
             put("cornerRadius", config.cornerRadius)
             put("fontScale", config.fontScale.toDouble())
+            put("showSummary", config.showSummary)
         }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_THEME, obj.toString()).apply()
+            .edit().putString(KEY_SETTINGS, obj.toString()).apply()
     }
 
-    fun loadTheme(context: Context): UserThemeConfig {
+    fun loadSettings(context: Context): UserAppSettings {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_THEME, null) ?: return UserThemeConfig()
+            .getString(KEY_SETTINGS, null) ?: return UserAppSettings()
         return try {
             val o = JSONObject(raw)
-            UserThemeConfig(
+            UserAppSettings(
                 paletteId = o.optString("paletteId", "emerald"),
                 darkMode = o.optString("darkMode", "system"),
                 cardStyle = o.optString("cardStyle", "outlined"),
                 cornerRadius = o.optInt("cornerRadius", 18),
-                fontScale = o.optDouble("fontScale", 1.0).toFloat()
+                fontScale = o.optDouble("fontScale", 1.0).toFloat(),
+                showSummary = o.optBoolean("showSummary", true)
             )
         } catch (_: Exception) {
-            UserThemeConfig()
+            UserAppSettings()
         }
     }
 
@@ -578,16 +580,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val context = LocalContext.current
-            var themeConfig by remember { mutableStateOf(LocalCache.loadTheme(context)) }
+            var appSettings by remember { mutableStateOf(LocalCache.loadSettings(context)) }
             val systemDark = isSystemInDarkTheme()
 
-            val isDark = when (themeConfig.darkMode) {
+            val isDark = when (appSettings.darkMode) {
                 "light" -> false
                 "dark", "amoled" -> true
                 else -> systemDark
             }
-            val isAmoled = themeConfig.darkMode == "amoled"
-            val palette = AppPalettes.find { it.id == themeConfig.paletteId } ?: AppPalettes.first()
+            val isAmoled = appSettings.darkMode == "amoled"
+            val palette = AppPalettes.find { it.id == appSettings.paletteId } ?: AppPalettes.first()
 
             val primaryColor by animateColorAsState(
                 targetValue = if (isDark) palette.primaryDark else palette.primaryLight,
@@ -603,7 +605,7 @@ class MainActivity : ComponentActivity() {
             )
             val surfaceColor by animateColorAsState(
                 targetValue = when {
-                    isAmoled -> Color(0xFF0A0F0D)
+                    isAmoled -> Color(0xFF0B100E)
                     isDark -> palette.surfaceDark
                     else -> Color.White
                 },
@@ -636,10 +638,10 @@ class MainActivity : ComponentActivity() {
 
             MaterialTheme(colorScheme = colors) {
                 NewsPulseAppScreen(
-                    themeConfig = themeConfig,
-                    onThemeChange = { updated ->
-                        themeConfig = updated
-                        LocalCache.saveTheme(context, updated)
+                    settings = appSettings,
+                    onSettingsChange = { updated ->
+                        appSettings = updated
+                        LocalCache.saveSettings(context, updated)
                     }
                 )
             }
@@ -650,8 +652,8 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewsPulseAppScreen(
-    themeConfig: UserThemeConfig,
-    onThemeChange: (UserThemeConfig) -> Unit
+    settings: UserAppSettings,
+    onSettingsChange: (UserAppSettings) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -745,14 +747,14 @@ fun NewsPulseAppScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .size(10.dp)
+                                    .size(9.dp)
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.primary)
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 "NewsPulse AI",
-                                fontSize = 22.sp,
+                                fontSize = 21.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
@@ -765,83 +767,82 @@ fun NewsPulseAppScreen(
                     }
 
                     if (selectedTab != 2) {
-                        Button(
-                            onClick = { refreshFeed() },
-                            enabled = !isLoading,
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable(enabled = !isLoading) { refreshFeed() },
                             shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                            color = MaterialTheme.colorScheme.primary
                         ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(15.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Обновить",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
-                            } else {
-                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                             }
-                            Spacer(Modifier.width(6.dp))
-                            Text("Обновить", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             }
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 4.dp
-            ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Outlined.Newspaper, contentDescription = null) },
-                    label = { Text("Лента") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
-                    label = { Text("Избранное (${savedList.size})") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = {
-                        Icon(
-                            if (selectedTab == 2) Icons.Filled.Palette else Icons.Outlined.Palette,
-                            contentDescription = null
-                        )
-                    },
-                    label = { Text("Темы") }
-                )
-            }
+            FloatingCapsuleNavBar(
+                selectedTab = selectedTab,
+                savedCount = savedList.size,
+                onSelectTab = { selectedTab = it }
+            )
         }
     ) { innerPadding ->
         if (selectedTab == 2) {
-            ThemesCustomizationScreen(
+            SettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-                config = themeConfig,
-                onConfigChange = onThemeChange
+                    .padding(top = innerPadding.calculateTopPadding()),
+                bottomPadding = innerPadding.calculateBottomPadding() + 16.dp,
+                settings = settings,
+                onSettingsChange = onSettingsChange,
+                onClearCache = {
+                    newsList = emptyList()
+                    LocalCache.setCached(context, emptyList())
+                    refreshFeed()
+                }
             )
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(top = innerPadding.calculateTopPadding()),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 6.dp,
+                    bottom = innerPadding.calculateBottomPadding() + 16.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (selectedTab == 0) {
                     item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Мини-дашборд статистики
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -858,57 +859,90 @@ fun NewsPulseAppScreen(
                                 )
                                 StatPill(
                                     modifier = Modifier.weight(1f),
-                                    title = "В избранном",
+                                    title = "Избранное",
                                     value = "${savedList.size}"
                                 )
                             }
 
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = { Text("Поиск: HyperOS, Xiaomi 17T, Galaxy, ИИ...", fontSize = 13.sp) },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                                trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { searchQuery = "" }) {
-                                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(18.dp))
+                            // Единая стилизованная строка поиска без резких рамок
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
+                            ) {
+                                TextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    placeholder = {
+                                        Text(
+                                            "Поиск: HyperOS, Xiaomi 17T, Galaxy, ИИ...",
+                                            fontSize = 13.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Search,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(19.dp)
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { searchQuery = "" }) {
+                                                Icon(
+                                                    Icons.Default.Close,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
                                         }
-                                    }
-                                },
-                                singleLine = true,
-                                shape = RoundedCornerShape(14.dp)
-                            )
+                                    },
+                                    singleLine = true,
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = Color.Transparent,
+                                        unfocusedContainerColor = Color.Transparent,
+                                        focusedIndicatorColor = Color.Transparent,
+                                        unfocusedIndicatorColor = Color.Transparent,
+                                        disabledIndicatorColor = Color.Transparent
+                                    )
+                                )
+                            }
 
+                            // Ряд фильтров по платформам и свежести (единые чипы без белых рамок)
                             Row(
                                 modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                FilterChip(
+                                StyledFilterChip(
+                                    label = "За 24ч",
                                     selected = freshOnly,
-                                    onClick = { freshOnly = !freshOnly },
-                                    label = { Text("🔥 За 24ч", fontSize = 12.sp) }
+                                    onClick = { freshOnly = !freshOnly }
                                 )
                                 platforms.forEach { plat ->
-                                    FilterChip(
+                                    StyledFilterChip(
+                                        label = plat,
                                         selected = selectedPlatform == plat,
-                                        onClick = { selectedPlatform = plat },
-                                        label = { Text(plat, fontSize = 12.sp) }
+                                        onClick = { selectedPlatform = plat }
                                     )
                                 }
                             }
 
+                            // Ряд фильтров по брендам (в едином стиле)
                             Row(
                                 modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 brands.forEach { brand ->
                                     val count = brandCounts[brand] ?: 0
                                     val labelText = if (brand == "Все") "Все ($count)" else "$brand ($count)"
-                                    FilterChip(
+                                    StyledFilterChip(
+                                        label = labelText,
                                         selected = selectedBrand == brand,
-                                        onClick = { selectedBrand = brand },
-                                        label = { Text(labelText, fontSize = 12.sp) }
+                                        onClick = { selectedBrand = brand }
                                     )
                                 }
                             }
@@ -927,7 +961,7 @@ fun NewsPulseAppScreen(
                             Text(
                                 text = if (isLoading) "Загружаем свежие новости по всем брендам..."
                                 else if (selectedTab == 1) "В избранном пока пусто"
-                                else "По этому фильтру новостей нет — попробуй сбросить платформу «Все»",
+                                else "По этому фильтру новостей нет — попробуй выбрать платформу «Все»",
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                                 fontSize = 14.sp
                             )
@@ -939,7 +973,7 @@ fun NewsPulseAppScreen(
                         NewsCard(
                             item = item,
                             isSaved = isSaved,
-                            themeConfig = themeConfig,
+                            settings = settings,
                             onOpen = { openCustomTab(context, item.url) },
                             onShare = { shareArticle(context, item) },
                             onToggleSave = {
@@ -960,12 +994,153 @@ fun NewsPulseAppScreen(
 }
 
 @Composable
+fun FloatingCapsuleNavBar(
+    selectedTab: Int,
+    savedCount: Int,
+    onSelectTab: (Int) -> Unit
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    val surface = MaterialTheme.colorScheme.surface
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier
+                .shadow(
+                    elevation = 10.dp,
+                    shape = RoundedCornerShape(28.dp),
+                    ambientColor = primary.copy(alpha = 0.25f),
+                    spotColor = primary.copy(alpha = 0.25f)
+                ),
+            shape = RoundedCornerShape(28.dp),
+            color = surface.copy(alpha = 0.96f),
+            border = BorderStroke(1.dp, primary.copy(alpha = 0.24f))
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CapsuleNavItem(
+                    selected = selectedTab == 0,
+                    icon = Icons.Outlined.Newspaper,
+                    label = "Лента",
+                    onClick = { onSelectTab(0) }
+                )
+                CapsuleNavItem(
+                    selected = selectedTab == 1,
+                    icon = if (selectedTab == 1) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                    label = if (savedCount > 0) "Избранное ($savedCount)" else "Избранное",
+                    onClick = { onSelectTab(1) }
+                )
+                CapsuleNavItem(
+                    selected = selectedTab == 2,
+                    icon = if (selectedTab == 2) Icons.Filled.Settings else Icons.Outlined.Settings,
+                    label = "Настройки",
+                    onClick = { onSelectTab(2) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CapsuleNavItem(
+    selected: Boolean,
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) primary.copy(alpha = 0.16f) else Color.Transparent,
+        label = "navBg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+        label = "navContent"
+    )
+
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(22.dp))
+            .background(bgColor)
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = contentColor,
+            modifier = Modifier.size(19.dp)
+        )
+        if (selected) {
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = contentColor,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+fun StyledFilterChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) primary else MaterialTheme.colorScheme.surface,
+        label = "chipBg"
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+        label = "chipText"
+    )
+    val borderColor = if (selected) primary else primary.copy(alpha = 0.2f)
+
+    Surface(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        color = bgColor,
+        border = BorderStroke(1.dp, borderColor)
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = textColor,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
 fun StatPill(modifier: Modifier = Modifier, title: String, value: String) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -987,39 +1162,46 @@ fun StatPill(modifier: Modifier = Modifier, title: String, value: String) {
 }
 
 @Composable
-fun ThemesCustomizationScreen(
+fun SettingsScreen(
     modifier: Modifier = Modifier,
-    config: UserThemeConfig,
-    onConfigChange: (UserThemeConfig) -> Unit
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    settings: UserAppSettings,
+    onSettingsChange: (UserAppSettings) -> Unit,
+    onClearCache: () -> Unit
 ) {
     LazyColumn(
         modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 8.dp,
+            bottom = bottomPadding
+        ),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Column {
                 Text(
-                    "Оформление и темы",
-                    fontSize = 20.sp,
+                    "Настройки",
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    "Настрой цвета, фон, форму карточек и размер текста под себя",
+                    "Персонализация тем, шрифта, карточек и ленты новостей",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                 )
             }
         }
 
-        // 1. Режим фона
+        // Раздел 1: Темы и цветовая схема
         item {
-            ThemeSectionCard(title = "Режим экрана") {
+            SettingsSectionCard(title = "Тема и режим экрана") {
                 val modes = listOf(
-                    "system" to "Системный",
-                    "light" to "Светлый",
-                    "dark" to "Тёмный",
+                    "system" to "Авто",
+                    "light" to "Светлая",
+                    "dark" to "Тёмная",
                     "amoled" to "AMOLED"
                 )
                 Row(
@@ -1027,63 +1209,66 @@ fun ThemesCustomizationScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     modes.forEach { (id, label) ->
-                        val selected = config.darkMode == id
-                        FilterChip(
-                            selected = selected,
-                            onClick = { onConfigChange(config.copy(darkMode = id)) },
-                            label = { Text(label, fontSize = 12.sp) },
+                        StyledFilterChip(
+                            label = label,
+                            selected = settings.darkMode == id,
+                            onClick = { onSettingsChange(settings.copy(darkMode = id)) },
                             modifier = Modifier.weight(1f)
                         )
                     }
                 }
-            }
-        }
 
-        // 2. Цветовые палитры
-        item {
-            ThemeSectionCard(title = "Цветовая палитра") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "Цветовая палитра",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                Spacer(Modifier.height(8.dp))
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     AppPalettes.chunked(2).forEach { rowPalettes ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             rowPalettes.forEach { pal ->
-                                val isSelected = config.paletteId == pal.id
+                                val isSelected = settings.paletteId == pal.id
                                 Surface(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(14.dp))
-                                        .clickable { onConfigChange(config.copy(paletteId = pal.id)) },
+                                        .clickable { onSettingsChange(settings.copy(paletteId = pal.id)) },
                                     shape = RoundedCornerShape(14.dp),
                                     color = if (isSelected) {
                                         MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
                                     } else {
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0.6f)
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0.65f)
                                     },
                                     border = BorderStroke(
-                                        width = if (isSelected) 2.dp else 1.dp,
+                                        width = if (isSelected) 1.5.dp else 1.dp,
                                         color = if (isSelected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
                                     )
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(12.dp),
+                                        modifier = Modifier.padding(11.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(22.dp)
+                                                    .size(20.dp)
                                                     .clip(CircleShape)
                                                     .background(pal.primaryDark)
                                                     .border(1.5.dp, Color.White.copy(alpha = 0.5f), CircleShape)
                                             )
-                                            Spacer(Modifier.width(10.dp))
+                                            Spacer(Modifier.width(8.dp))
                                             Text(
                                                 pal.name,
-                                                fontSize = 13.sp,
+                                                fontSize = 12.sp,
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                             )
                                         }
@@ -1092,7 +1277,7 @@ fun ThemesCustomizationScreen(
                                                 Icons.Default.Check,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
+                                                modifier = Modifier.size(16.dp)
                                             )
                                         }
                                     }
@@ -1104,36 +1289,89 @@ fun ThemesCustomizationScreen(
             }
         }
 
-        // 3. Стиль карточек
+        // Раздел 2: Размер текста и чтение
         item {
-            ThemeSectionCard(title = "Стиль карточек новостей") {
+            SettingsSectionCard(title = "Текст и отображение ленты") {
+                Text(
+                    "Размер шрифта",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+                Spacer(Modifier.height(8.dp))
+                val sizes = listOf(
+                    0.90f to "Мелкий",
+                    1.0f to "Стандарт",
+                    1.12f to "Крупный",
+                    1.22f to "Макси"
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    sizes.forEach { (scale, label) ->
+                        StyledFilterChip(
+                            label = label,
+                            selected = settings.fontScale == scale,
+                            onClick = { onSettingsChange(settings.copy(fontScale = scale)) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Показывать краткую суть",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "Отключите для компактного просмотра только заголовков",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = settings.showSummary,
+                        onCheckedChange = { onSettingsChange(settings.copy(showSummary = it)) }
+                    )
+                }
+            }
+        }
+
+        // Раздел 3: Форма и стиль карточек
+        item {
+            SettingsSectionCard(title = "Вид карточек и углы") {
                 val styles = listOf(
                     "outlined" to "Контурный",
-                    "filled" to "Мягкая заливка",
-                    "compact" to "Компактный"
+                    "filled" to "Заливка",
+                    "compact" to "Компакт"
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     styles.forEach { (id, label) ->
-                        FilterChip(
-                            selected = config.cardStyle == id,
-                            onClick = { onConfigChange(config.copy(cardStyle = id)) },
-                            label = { Text(label, fontSize = 12.sp) },
+                        StyledFilterChip(
+                            label = label,
+                            selected = settings.cardStyle == id,
+                            onClick = { onSettingsChange(settings.copy(cardStyle = id)) },
                             modifier = Modifier.weight(1f)
                         )
                     }
                 }
-            }
-        }
 
-        // 4. Скругление углов
-        item {
-            ThemeSectionCard(title = "Форма углов") {
+                Spacer(Modifier.height(12.dp))
                 val corners = listOf(
-                    10 to "Строгие (10dp)",
-                    18 to "Современные (18dp)",
+                    12 to "Строгие (12dp)",
+                    18 to "Средние (18dp)",
                     26 to "Плавные (26dp)"
                 )
                 Row(
@@ -1141,34 +1379,10 @@ fun ThemesCustomizationScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     corners.forEach { (radius, label) ->
-                        FilterChip(
-                            selected = config.cornerRadius == radius,
-                            onClick = { onConfigChange(config.copy(cornerRadius = radius)) },
-                            label = { Text(label, fontSize = 11.sp) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-        }
-
-        // 5. Размер шрифта
-        item {
-            ThemeSectionCard(title = "Размер текста") {
-                val sizes = listOf(
-                    0.92f to "Мелкий",
-                    1.0f to "Стандарт",
-                    1.12f to "Крупный"
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    sizes.forEach { (scale, label) ->
-                        FilterChip(
-                            selected = config.fontScale == scale,
-                            onClick = { onConfigChange(config.copy(fontScale = scale)) },
-                            label = { Text(label, fontSize = 12.sp) },
+                        StyledFilterChip(
+                            label = label,
+                            selected = settings.cornerRadius == radius,
+                            onClick = { onSettingsChange(settings.copy(cornerRadius = radius)) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1180,7 +1394,7 @@ fun ThemesCustomizationScreen(
         item {
             Text(
                 "Предпросмотр карточки",
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f)
             )
@@ -1198,30 +1412,57 @@ fun ThemesCustomizationScreen(
                     timeLabel = "Только что"
                 ),
                 isSaved = true,
-                themeConfig = config,
+                settings = settings,
                 onOpen = {},
                 onShare = {},
                 onToggleSave = {}
             )
         }
+
+        // Кнопки обслуживания
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onSettingsChange(UserAppSettings()) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                ) {
+                    Text("Сбросить тему", fontSize = 12.sp)
+                }
+                OutlinedButton(
+                    onClick = onClearCache,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                ) {
+                    Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Обновить кеш", fontSize = 12.sp)
+                }
+            }
+        }
     }
 }
 
 @Composable
-fun ThemeSectionCard(title: String, content: @Composable () -> Unit) {
+fun SettingsSectionCard(title: String, content: @Composable () -> Unit) {
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = title,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
             content()
         }
     }
@@ -1231,7 +1472,7 @@ fun ThemeSectionCard(title: String, content: @Composable () -> Unit) {
 fun NewsCard(
     item: NewsItem,
     isSaved: Boolean,
-    themeConfig: UserThemeConfig,
+    settings: UserAppSettings,
     onOpen: () -> Unit,
     onShare: () -> Unit,
     onToggleSave: () -> Unit
@@ -1243,18 +1484,18 @@ fun NewsCard(
         else -> Color(0xFF38BDF8)
     }
 
-    val shape = RoundedCornerShape(themeConfig.cornerRadius.dp)
-    val cardBorder = if (themeConfig.cardStyle == "outlined") {
+    val shape = RoundedCornerShape(settings.cornerRadius.dp)
+    val cardBorder = if (settings.cardStyle == "outlined") {
         BorderStroke(1.dp, primary.copy(alpha = 0.22f))
     } else null
 
-    val cardContainerColor = if (themeConfig.cardStyle == "filled") {
+    val cardContainerColor = if (settings.cardStyle == "filled") {
         primary.copy(alpha = 0.08f)
     } else {
         MaterialTheme.colorScheme.surface
     }
 
-    val scale = themeConfig.fontScale
+    val scale = settings.fontScale
 
     Card(
         modifier = Modifier
@@ -1264,7 +1505,7 @@ fun NewsCard(
         border = cardBorder,
         colors = CardDefaults.cardColors(containerColor = cardContainerColor)
     ) {
-        Column(modifier = Modifier.padding(if (themeConfig.cardStyle == "compact") 12.dp else 16.dp)) {
+        Column(modifier = Modifier.padding(if (settings.cardStyle == "compact") 12.dp else 16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1321,10 +1562,10 @@ fun NewsCard(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            if (themeConfig.cardStyle != "compact") {
+            if (settings.showSummary && settings.cardStyle != "compact") {
                 Spacer(Modifier.height(10.dp))
                 Surface(
-                    shape = RoundedCornerShape((themeConfig.cornerRadius - 4).coerceAtLeast(8).dp),
+                    shape = RoundedCornerShape((settings.cornerRadius - 4).coerceAtLeast(8).dp),
                     color = MaterialTheme.colorScheme.background.copy(alpha = 0.72f)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
