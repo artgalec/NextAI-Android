@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -82,8 +81,9 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import kotlin.math.atan2
+import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
 
 data class NewsItem(
@@ -194,44 +194,42 @@ val AppPalettes = listOf(
     )
 )
 
-enum class AgentActivityMode(val label: String) {
-    WORKING("За столом"),
-    LUNCH("На обеде"),
-    LOUNGE("Отдых у ТВ")
+enum class AgentLocationZone(val label: String) {
+    DESK("За рабочим столом"),
+    DINING("Обедает в столовой"),
+    LOUNGE("Отдыхает у ТВ")
 }
 
-data class AiAgentNode(
+data class OfficeAgentProfile(
     val id: Int,
     val name: String,
     val role: String,
     val roomTitle: String,
     val accentColor: Color,
-    val deskRx: Float,
-    val deskRy: Float,
-    val deskAbove: Boolean,
-    val loungeRx: Float,
-    val loungeRy: Float,
-    val diningRx: Float,
-    val diningRy: Float
+    val hairColor: Color,
+    val isTopRow: Boolean,
+    val deskChairPos: Offset,
+    val roomDoorPos: Offset,
+    val corridorEntryPos: Offset,
+    val diningSeatPos: Offset,
+    val loungeSeatPos: Offset
 )
 
-data class AgentTaskRecord(
+data class SoloTaskItem(
     val ticketNumber: Int,
-    val fromAgentId: Int,
-    val toAgentId: Int,
     val badge: String,
     val title: String,
     val resultSummary: String,
-    val createdAt: String,
+    val startedAt: String,
     val completedAt: String = ""
 )
 
-data class AgentWorkState(
-    val activeTask: AgentTaskRecord,
+data class AgentLiveStatus(
+    val currentTask: SoloTaskItem,
     val progress: Float,
-    val mode: AgentActivityMode = AgentActivityMode.WORKING,
-    val breakTicksLeft: Int = 0,
-    val completedTasks: List<AgentTaskRecord>
+    val targetZone: AgentLocationZone,
+    val breakTicksRemaining: Int,
+    val completedHistory: List<SoloTaskItem>
 )
 
 data class TgChannel(val name: String, val defaultBrand: String, val username: String)
@@ -1137,7 +1135,7 @@ fun NewsPulseAppScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = innerPadding.calculateTopPadding()),
-                bottomPadding = innerPadding.calculateBottomPadding() + 16.dp,
+                bottomPadding = innerPadding.calculateBottomPadding() + 12.dp,
                 settings = settings,
                 newsList = newsList,
                 isLoading = isLoading,
@@ -1158,7 +1156,7 @@ fun NewsPulseAppScreen(
                     start = 16.dp,
                     end = 16.dp,
                     top = 4.dp,
-                    bottom = innerPadding.calculateBottomPadding() + 16.dp
+                    bottom = innerPadding.calculateBottomPadding() + 12.dp
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -1217,20 +1215,21 @@ fun FullWidthBottomNavBar(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = surface,
-        shadowElevation = 12.dp
+        shadowElevation = 6.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(1.dp)
+                    .height(0.8.dp)
                     .background(primary.copy(alpha = 0.22f))
             )
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .height(42.dp)
+                    .padding(horizontal = 6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -1269,37 +1268,32 @@ fun FullWidthNavTab(
     onClick: () -> Unit
 ) {
     val primary = MaterialTheme.colorScheme.primary
-    val pillBg by animateColorAsState(
-        targetValue = if (selected) primary.copy(alpha = 0.16f) else Color.Transparent,
-        label = "tabPill"
+    val bgTint by animateColorAsState(
+        targetValue = if (selected) primary.copy(alpha = 0.14f) else Color.Transparent,
+        label = "tabBgCompact"
     )
     val contentColor by animateColorAsState(
-        targetValue = if (selected) primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
-        label = "tabColor"
+        targetValue = if (selected) primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+        label = "tabColorCompact"
     )
 
-    Column(
+    Row(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .clickable { onClick() }
-            .padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+            .fillMaxHeight()
+            .padding(vertical = 4.dp, horizontal = 3.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(bgTint)
+            .clickable { onClick() },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(pillBg)
-                .padding(horizontal = 18.dp, vertical = 5.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = contentColor,
-                modifier = Modifier.size(21.dp)
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = contentColor,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(5.dp))
         Text(
             text = label,
             fontSize = 11.sp,
@@ -1394,7 +1388,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    "Персонализация тем, шрифта, карточек и офис ИИ-агентов",
+                    "Персонализация тем, шрифта, карточек и ИИ-кабинет",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                 )
@@ -1439,7 +1433,7 @@ fun SettingsScreen(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    "ИИ-Офис (8 агентов)",
+                                    "ИИ-Кабинет (6 агентов)",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -1453,7 +1447,7 @@ fun SettingsScreen(
                                 )
                             }
                             Text(
-                                "Рабочие места, столовая, диванчики и телевизоры",
+                                "Кабинеты с мониторами, коридоры, столовая и комната отдыха",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -1464,7 +1458,7 @@ fun SettingsScreen(
                         color = primary
                     ) {
                         Text(
-                            "Войти",
+                            "Открыть",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimary,
@@ -1723,96 +1717,95 @@ fun SettingsScreen(
     }
 }
 
-private fun generateFreshAgentTask(
+private fun createSoloAgentTask(
     ticketNumber: Int,
-    fromId: Int,
-    toId: Int,
+    agentId: Int,
     newsList: List<NewsItem>
-): AgentTaskRecord {
+): SoloTaskItem {
     val nowStr = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
     val sampleNews = if (newsList.isNotEmpty()) {
-        newsList[(ticketNumber * 3) % newsList.size]
+        newsList[(ticketNumber * 5 + agentId) % newsList.size]
     } else null
 
     val brandPool = listOf("Xiaomi", "Samsung", "Huawei", "Apple", "HONOR", "OnePlus", "Google", "realme", "Электроавто", "Умный дом и ТВ")
-    val brand = sampleNews?.brand?.takeIf { it != "Общее" } ?: brandPool[ticketNumber % brandPool.size]
-    val source = sampleNews?.sourceLabel ?: listOf("4PDA", "Rozetked", "iXBT", "Telegram", "Instagram")[ticketNumber % 5]
-    val headlineHint = sampleNews?.title?.take(42)?.let { "«$it...»" } ?: "новинкам $brand"
+    val brand = sampleNews?.brand?.takeIf { it != "Общее" } ?: brandPool[(ticketNumber + agentId) % brandPool.size]
+    val source = sampleNews?.sourceLabel ?: listOf("4PDA", "Rozetked", "iXBT", "Telegram", "Instagram")[(ticketNumber + agentId) % 5]
+    val headlineHint = sampleNews?.title?.take(44)?.let { "«$it...»" } ?: "новинкам $brand"
 
-    return when (toId) {
-        0 -> AgentTaskRecord(
+    return when (agentId) {
+        0 -> SoloTaskItem(
             ticketNumber = ticketNumber,
-            fromAgentId = fromId,
-            toAgentId = 0,
-            badge = "СМИ • $brand",
-            title = "Просканировать RSS-ленты $source по смартфонам и гаджетам $brand ($headlineHint)",
-            resultSummary = "Собрано ${3 + (ticketNumber % 5)} свежих статей о технике $brand из $source",
-            createdAt = nowStr
+            badge = "СМИ и RSS • $brand",
+            title = "Парсинг RSS-лент $source: разбор обзоров и характеристик $brand ($headlineHint)",
+            resultSummary = "Обработано ${3 + (ticketNumber % 4)} свежих материала $source по бренду $brand",
+            startedAt = nowStr
         )
-        1 -> AgentTaskRecord(
+        1 -> SoloTaskItem(
             ticketNumber = ticketNumber,
-            fromAgentId = fromId,
-            toAgentId = 1,
-            badge = "TG • $brand",
-            title = "Проверить утечки и посты про смартфоны $brand в Telegram-каналах ($headlineHint)",
-            resultSummary = "Найдено ${2 + (ticketNumber % 4)} эксклюзивных поста в Telegram по теме $brand",
-            createdAt = nowStr
+            badge = "Telegram • $brand",
+            title = "Мониторинг Telegram-каналов: проверка инсайдов и прошивок $brand ($headlineHint)",
+            resultSummary = "Извлечено ${2 + (ticketNumber % 4)} поста из Telegram по теме $brand",
+            startedAt = nowStr
         )
-        2 -> AgentTaskRecord(
+        2 -> SoloTaskItem(
             ticketNumber = ticketNumber,
-            fromAgentId = fromId,
-            toAgentId = 2,
             badge = "Instagram • $brand",
-            title = "Проверить официальные тизеры и рилсы $brand в Instagram по новинке $headlineHint",
-            resultSummary = "Загружены свежие анонсы из Instagram-аккаунта $brand без репостов",
-            createdAt = nowStr
+            title = "Проверка официального Instagram $brand: анонсы, тизеры и фото новинок",
+            resultSummary = "Проверены свежие публикации Instagram-профиля $brand",
+            startedAt = nowStr
         )
-        3 -> AgentTaskRecord(
+        3 -> SoloTaskItem(
             ticketNumber = ticketNumber,
-            fromAgentId = fromId,
-            toAgentId = 3,
-            badge = "Электрокары",
-            title = "Собрать новости про электромобили Xiaomi SU7/YU7, Zeekr, BYD и автопилоты",
-            resultSummary = "Отобрано ${2 + (ticketNumber % 3)} новых обзора по электрокарам и батареям",
-            createdAt = nowStr
+            badge = "Электроавто",
+            title = "Анализ новостей по электрокарам Xiaomi SU7/YU7, Zeekr, BYD и батареям",
+            resultSummary = "Обновлена сводка по электромобилям и новым автопилотам",
+            startedAt = nowStr
         )
-        4 -> AgentTaskRecord(
+        4 -> SoloTaskItem(
             ticketNumber = ticketNumber,
-            fromAgentId = fromId,
-            toAgentId = 4,
-            badge = "ТВ и Дом",
-            title = "Найти анонсы OLED/Mini-LED телевизоров, роботов-пылесосов и устройств умного дома",
-            resultSummary = "Добавлены свежие релизы телевизоров и гаджетов умного дома",
-            createdAt = nowStr
+            badge = "ТВ и Умный дом",
+            title = "Сбор релизов OLED/Mini-LED телевизоров, роботов-пылесосов и датчиков Aqara",
+            resultSummary = "Добавлены новые анонсы телевизоров и устройств умного дома",
+            startedAt = nowStr
         )
-        5 -> AgentTaskRecord(
+        else -> SoloTaskItem(
             ticketNumber = ticketNumber,
-            fromAgentId = fromId,
-            toAgentId = 5,
-            badge = "Ноутбуки и ПК",
-            title = "Проверить релизы ноутбуков MacBook, MateBook, MagicBook и новых видеокарт/процессоров",
-            resultSummary = "Собраны характеристики и цены ${2 + (ticketNumber % 4)} новых ноутбуков",
-            createdAt = nowStr
-        )
-        6 -> AgentTaskRecord(
-            ticketNumber = ticketNumber,
-            fromAgentId = fromId,
-            toAgentId = 6,
-            badge = "Анти-шум",
-            title = "Отфильтровать космос, оффтоп и дубликаты по $brand в материале $headlineHint",
-            resultSummary = "Отсеян нетехнический шум, оставлены только новости о железе и гаджетах",
-            createdAt = nowStr
-        )
-        else -> AgentTaskRecord(
-            ticketNumber = ticketNumber,
-            fromAgentId = fromId,
-            toAgentId = 7,
-            badge = "Сводка • $brand",
-            title = "Сформировать краткую суть новости $headlineHint для карточки в общей ленте",
-            resultSummary = "Готова краткая выжимка и обновлена карточка $brand в ленте",
-            createdAt = nowStr
+            badge = "Ноутбуки и Фильтр",
+            title = "Проверка релизов ноутбуков MacBook/MateBook и очистка ленты от нетехнического шума",
+            resultSummary = "Отфильтрованы дубликаты и проверены характеристики новых ноутбуков",
+            startedAt = nowStr
         )
     }
+}
+
+private fun advanceWalkStep(
+    current: Offset,
+    waypoints: List<Offset>,
+    maxStep: Float
+): Pair<Offset, Boolean> {
+    if (waypoints.isEmpty()) return current to false
+    var pos = current
+    var remaining = maxStep
+    var moved = false
+
+    for (wp in waypoints) {
+        val dx = wp.x - pos.x
+        val dy = wp.y - pos.y
+        val dist = hypot(dx, dy)
+        if (dist < 0.0025f) {
+            pos = wp
+            continue
+        }
+        moved = true
+        if (dist <= remaining) {
+            pos = wp
+            remaining -= dist
+        } else {
+            pos = Offset(pos.x + (dx / dist) * remaining, pos.y + (dy / dist) * remaining)
+            return pos to true
+        }
+    }
+    return pos to moved
 }
 
 @Composable
@@ -1824,198 +1817,270 @@ fun AiOfficeLiveDialog(
 ) {
     val primary = MaterialTheme.colorScheme.primary
 
+    // 6 индивидуальных кабинетов (3 сверху, 3 снизу), посередине коридоры, столовая слева и комната отдыха справа
     val agents = remember {
         listOf(
-            AiAgentNode(0, "Алиса", "СМИ", "Отдел СМИ", Color(0xFF10B981), 0.14f, 0.21f, true, 0.16f, 0.54f, 0.68f, 0.46f),
-            AiAgentNode(1, "Макс", "Telegram", "Сектор TG", Color(0xFF38BDF8), 0.38f, 0.21f, true, 0.25f, 0.54f, 0.78f, 0.46f),
-            AiAgentNode(2, "Инста", "Instagram", "Сектор IG", Color(0xFFF43F5E), 0.62f, 0.21f, true, 0.34f, 0.54f, 0.68f, 0.56f),
-            AiAgentNode(3, "Авто-ИИ", "Электрокары", "Авто-лаб", Color(0xFF22D3EE), 0.86f, 0.21f, true, 0.42f, 0.54f, 0.78f, 0.56f),
-            AiAgentNode(4, "Дом-Бот", "ТВ и Дом", "Умный дом", Color(0xFFF59E0B), 0.14f, 0.81f, false, 0.16f, 0.54f, 0.68f, 0.46f),
-            AiAgentNode(5, "Ноут-ИИ", "Ноутбуки", "ПК-сектор", Color(0xFF818CF8), 0.38f, 0.81f, false, 0.25f, 0.54f, 0.78f, 0.46f),
-            AiAgentNode(6, "Нова", "Фильтр", "Анти-шум", Color(0xFFA78BFA), 0.62f, 0.81f, false, 0.34f, 0.54f, 0.68f, 0.56f),
-            AiAgentNode(7, "Пульс", "Редактор", "Дайджест", Color(0xFF34D399), 0.86f, 0.81f, false, 0.42f, 0.54f, 0.78f, 0.56f)
+            OfficeAgentProfile(
+                id = 0, name = "Алиса", role = "СМИ и RSS", roomTitle = "Кабинет 1 • СМИ",
+                accentColor = Color(0xFF10B981), hairColor = Color(0xFF78350F), isTopRow = true,
+                deskChairPos = Offset(0.17f, 0.21f), roomDoorPos = Offset(0.17f, 0.30f), corridorEntryPos = Offset(0.17f, 0.36f),
+                diningSeatPos = Offset(0.12f, 0.56f), loungeSeatPos = Offset(0.66f, 0.59f)
+            ),
+            OfficeAgentProfile(
+                id = 1, name = "Макс", role = "Telegram", roomTitle = "Кабинет 2 • TG",
+                accentColor = Color(0xFF38BDF8), hairColor = Color(0xFF1E293B), isTopRow = true,
+                deskChairPos = Offset(0.50f, 0.21f), roomDoorPos = Offset(0.50f, 0.30f), corridorEntryPos = Offset(0.50f, 0.36f),
+                diningSeatPos = Offset(0.24f, 0.56f), loungeSeatPos = Offset(0.76f, 0.59f)
+            ),
+            OfficeAgentProfile(
+                id = 2, name = "Инста", role = "Instagram", roomTitle = "Кабинет 3 • IG",
+                accentColor = Color(0xFFF43F5E), hairColor = Color(0xFF9F1239), isTopRow = true,
+                deskChairPos = Offset(0.83f, 0.21f), roomDoorPos = Offset(0.83f, 0.30f), corridorEntryPos = Offset(0.83f, 0.36f),
+                diningSeatPos = Offset(0.35f, 0.56f), loungeSeatPos = Offset(0.86f, 0.59f)
+            ),
+            OfficeAgentProfile(
+                id = 3, name = "Авто-ИИ", role = "Электроавто", roomTitle = "Кабинет 4 • Авто",
+                accentColor = Color(0xFF22D3EE), hairColor = Color(0xFF0F172A), isTopRow = false,
+                deskChairPos = Offset(0.17f, 0.79f), roomDoorPos = Offset(0.17f, 0.70f), corridorEntryPos = Offset(0.17f, 0.64f),
+                diningSeatPos = Offset(0.12f, 0.56f), loungeSeatPos = Offset(0.66f, 0.59f)
+            ),
+            OfficeAgentProfile(
+                id = 4, name = "Дом-Бот", role = "ТВ и Дом", roomTitle = "Кабинет 5 • ТВ/Дом",
+                accentColor = Color(0xFFF59E0B), hairColor = Color(0xFF451A03), isTopRow = false,
+                deskChairPos = Offset(0.50f, 0.79f), roomDoorPos = Offset(0.50f, 0.70f), corridorEntryPos = Offset(0.50f, 0.64f),
+                diningSeatPos = Offset(0.24f, 0.56f), loungeSeatPos = Offset(0.76f, 0.59f)
+            ),
+            OfficeAgentProfile(
+                id = 5, name = "Нова", role = "Ноутбуки/ПК", roomTitle = "Кабинет 6 • ПК",
+                accentColor = Color(0xFFA78BFA), hairColor = Color(0xFF312E81), isTopRow = false,
+                deskChairPos = Offset(0.83f, 0.79f), roomDoorPos = Offset(0.83f, 0.70f), corridorEntryPos = Offset(0.83f, 0.64f),
+                diningSeatPos = Offset(0.35f, 0.56f), loungeSeatPos = Offset(0.86f, 0.59f)
+            )
         )
     }
 
-    var ticketSeq by remember { mutableIntStateOf(210) }
+    var ticketCounter by remember { mutableIntStateOf(115) }
     var selectedAgentId by remember { mutableIntStateOf(0) }
-    var activeDispatch by remember {
-        mutableStateOf(
-            generateFreshAgentTask(ticketNumber = 209, fromId = 2, toId = 6, newsList = newsList)
-        )
-    }
 
-    val agentWorkStates = remember {
-        mutableStateMapOf<Int, AgentWorkState>().apply {
+    val agentStatuses = remember {
+        mutableStateMapOf<Int, AgentLiveStatus>().apply {
             agents.forEachIndexed { idx, ag ->
-                val initialDone = generateFreshAgentTask(
-                    ticketNumber = 200 + idx,
-                    fromId = (idx + 5) % 8,
-                    toId = ag.id,
+                val pastTask = createSoloAgentTask(
+                    ticketNumber = 100 + idx,
+                    agentId = ag.id,
                     newsList = newsList
-                ).copy(completedAt = ZonedDateTime.now().minusMinutes(1).format(DateTimeFormatter.ofPattern("HH:mm:ss")))
+                ).copy(completedAt = ZonedDateTime.now().minusMinutes(2).format(DateTimeFormatter.ofPattern("HH:mm:ss")))
 
-                val initialCurrent = generateFreshAgentTask(
-                    ticketNumber = 208 + idx,
-                    fromId = (idx + 1) % 8,
-                    toId = ag.id,
+                val activeTask = createSoloAgentTask(
+                    ticketNumber = 108 + idx,
+                    agentId = ag.id,
                     newsList = newsList
                 )
-                val initialMode = when (idx) {
-                    2 -> AgentActivityMode.LOUNGE
-                    5 -> AgentActivityMode.LUNCH
-                    else -> AgentActivityMode.WORKING
+                val startZone = when (idx) {
+                    2 -> AgentLocationZone.LOUNGE
+                    4 -> AgentLocationZone.DINING
+                    else -> AgentLocationZone.DESK
                 }
                 put(
                     ag.id,
-                    AgentWorkState(
-                        activeTask = initialCurrent,
-                        progress = 0.20f + (idx * 0.09f),
-                        mode = initialMode,
-                        breakTicksLeft = if (initialMode != AgentActivityMode.WORKING) 6 else 0,
-                        completedTasks = listOf(initialDone)
+                    AgentLiveStatus(
+                        currentTask = activeTask,
+                        progress = 0.18f + (idx * 0.11f),
+                        targetZone = startZone,
+                        breakTicksRemaining = if (startZone != AgentLocationZone.DESK) 14 else 0,
+                        completedHistory = listOf(pastTask)
                     )
                 )
             }
         }
     }
 
+    val agentPositions = remember {
+        mutableStateMapOf<Int, Offset>().apply {
+            agents.forEach { ag ->
+                val zone = agentStatuses[ag.id]?.targetZone ?: AgentLocationZone.DESK
+                put(
+                    ag.id,
+                    when (zone) {
+                        AgentLocationZone.DESK -> ag.deskChairPos
+                        AgentLocationZone.DINING -> ag.diningSeatPos
+                        AgentLocationZone.LOUNGE -> ag.loungeSeatPos
+                    }
+                )
+            }
+        }
+    }
+
+    val agentWalkingFlags = remember {
+        mutableStateMapOf<Int, Boolean>().apply {
+            agents.forEach { put(it.id, false) }
+        }
+    }
+
+    // Размеренный цикл: задачи выполняются спокойно (15-20 сек), люди плавно идут ножками по коридорам
     LaunchedEffect(isScanning, newsList.size) {
         while (true) {
-            delay(if (isScanning) 340L else 560L)
-            val stepIncrement = if (isScanning) 0.20f else 0.12f
+            delay(80L)
+            val progressStep = if (isScanning) 0.0085f else 0.0042f
 
-            for (agId in 0..7) {
-                val current = agentWorkStates[agId] ?: continue
+            for (ag in agents) {
+                val status = agentStatuses[ag.id] ?: continue
+                val curPos = agentPositions[ag.id] ?: ag.deskChairPos
 
-                if (current.mode != AgentActivityMode.WORKING) {
-                    if (current.breakTicksLeft > 1) {
-                        agentWorkStates[agId] = current.copy(breakTicksLeft = current.breakTicksLeft - 1)
-                    } else {
-                        ticketSeq += 1
-                        val nextSelfTask = generateFreshAgentTask(
-                            ticketNumber = ticketSeq,
-                            fromId = (agId + 3) % 8,
-                            toId = agId,
-                            newsList = newsList
-                        )
-                        agentWorkStates[agId] = current.copy(
-                            activeTask = nextSelfTask,
-                            progress = 0.05f,
-                            mode = AgentActivityMode.WORKING,
-                            breakTicksLeft = 0
-                        )
-                    }
-                    continue
+                // Маршрут по коридорам через дверной проём (чтобы агенты не ходили сквозь стены)
+                val waypoints = when (status.targetZone) {
+                    AgentLocationZone.DESK -> listOf(
+                        Offset(0.50f, curPos.y),
+                        Offset(0.50f, ag.corridorEntryPos.y),
+                        ag.corridorEntryPos,
+                        ag.roomDoorPos,
+                        ag.deskChairPos
+                    )
+                    AgentLocationZone.DINING -> listOf(
+                        ag.roomDoorPos,
+                        ag.corridorEntryPos,
+                        Offset(0.50f, ag.corridorEntryPos.y),
+                        Offset(0.50f, 0.50f),
+                        Offset(ag.diningSeatPos.x, 0.50f),
+                        ag.diningSeatPos
+                    )
+                    AgentLocationZone.LOUNGE -> listOf(
+                        ag.roomDoorPos,
+                        ag.corridorEntryPos,
+                        Offset(0.50f, ag.corridorEntryPos.y),
+                        Offset(0.50f, 0.50f),
+                        Offset(ag.loungeSeatPos.x, 0.50f),
+                        ag.loungeSeatPos
+                    )
                 }
 
-                val nextProgress = current.progress + stepIncrement
-                if (nextProgress >= 1.0f) {
-                    val finishedTime = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                    val completedItem = current.activeTask.copy(completedAt = finishedTime)
+                // Выбираем только оставшиеся точки маршрута впереди
+                val filteredWaypoints = when (status.targetZone) {
+                    AgentLocationZone.DESK -> {
+                        if (abs(curPos.x - ag.deskChairPos.x) < 0.02f &&
+                            ((ag.isTopRow && curPos.y <= ag.corridorEntryPos.y + 0.01f) ||
+                                (!ag.isTopRow && curPos.y >= ag.corridorEntryPos.y - 0.01f))
+                        ) {
+                            listOf(ag.roomDoorPos, ag.deskChairPos)
+                        } else {
+                            waypoints
+                        }
+                    }
+                    else -> {
+                        if ((ag.isTopRow && curPos.y >= 0.35f) || (!ag.isTopRow && curPos.y <= 0.65f)) {
+                            listOf(
+                                Offset(0.50f, 0.50f),
+                                Offset(
+                                    if (status.targetZone == AgentLocationZone.DINING) ag.diningSeatPos.x else ag.loungeSeatPos.x,
+                                    0.50f
+                                ),
+                                if (status.targetZone == AgentLocationZone.DINING) ag.diningSeatPos else ag.loungeSeatPos
+                            )
+                        } else {
+                            waypoints
+                        }
+                    }
+                }
 
-                    val nextReceiverId = (agId + 1 + (ticketSeq % 7)) % 8
-                    ticketSeq += 1
-                    val newAssignedTask = generateFreshAgentTask(
-                        ticketNumber = ticketSeq,
-                        fromId = agId,
-                        toId = nextReceiverId,
-                        newsList = newsList
-                    )
-                    activeDispatch = newAssignedTask
+                val (nextPos, isWalkingNow) = advanceWalkStep(
+                    current = curPos,
+                    waypoints = filteredWaypoints,
+                    maxStep = 0.014f
+                )
+                agentPositions[ag.id] = nextPos
+                agentWalkingFlags[ag.id] = isWalkingNow
 
-                    val activeBreaksCount = agentWorkStates.values.count { it.mode != AgentActivityMode.WORKING }
-                    val goBreak = !isScanning && activeBreaksCount < 3 && ((ticketSeq + agId) % 3 == 0)
+                // Пока агент идёт ножками по коридору, ждём, пока он дойдёт до места
+                if (isWalkingNow) continue
 
-                    if (goBreak) {
-                        val breakMode = if ((ticketSeq + agId) % 2 == 0) AgentActivityMode.LUNCH else AgentActivityMode.LOUNGE
-                        agentWorkStates[agId] = AgentWorkState(
-                            activeTask = current.activeTask,
-                            progress = 1.0f,
-                            mode = breakMode,
-                            breakTicksLeft = 7,
-                            completedTasks = (listOf(completedItem) + current.completedTasks).take(6)
-                        )
+                if (status.targetZone != AgentLocationZone.DESK) {
+                    if (status.breakTicksRemaining > 1) {
+                        agentStatuses[ag.id] = status.copy(breakTicksRemaining = status.breakTicksRemaining - 1)
                     } else {
-                        ticketSeq += 1
-                        val nextSelfTask = generateFreshAgentTask(
-                            ticketNumber = ticketSeq,
-                            fromId = (agId + 3) % 8,
-                            toId = agId,
+                        ticketCounter += 1
+                        val nextTask = createSoloAgentTask(
+                            ticketNumber = ticketCounter,
+                            agentId = ag.id,
                             newsList = newsList
                         )
-                        agentWorkStates[agId] = AgentWorkState(
-                            activeTask = nextSelfTask,
-                            progress = 0.05f,
-                            mode = AgentActivityMode.WORKING,
-                            breakTicksLeft = 0,
-                            completedTasks = (listOf(completedItem) + current.completedTasks).take(6)
+                        agentStatuses[ag.id] = status.copy(
+                            currentTask = nextTask,
+                            progress = 0.02f,
+                            targetZone = AgentLocationZone.DESK,
+                            breakTicksRemaining = 0
                         )
                     }
                 } else {
-                    agentWorkStates[agId] = current.copy(progress = nextProgress)
+                    val nextProg = status.progress + progressStep
+                    if (nextProg >= 1.0f) {
+                        val doneTime = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                        val finishedTask = status.currentTask.copy(completedAt = doneTime)
+
+                        val restingCount = agentStatuses.values.count { it.targetZone != AgentLocationZone.DESK }
+                        val takeBreak = !isScanning && restingCount < 2 && ((ticketCounter + ag.id) % 3 == 0)
+
+                        if (takeBreak) {
+                            val chosenZone = if ((ticketCounter + ag.id) % 2 == 0) AgentLocationZone.DINING else AgentLocationZone.LOUNGE
+                            agentStatuses[ag.id] = AgentLiveStatus(
+                                currentTask = status.currentTask,
+                                progress = 1.0f,
+                                targetZone = chosenZone,
+                                breakTicksRemaining = 110,
+                                completedHistory = (listOf(finishedTask) + status.completedHistory).take(6)
+                            )
+                        } else {
+                            ticketCounter += 1
+                            val nextTask = createSoloAgentTask(
+                                ticketNumber = ticketCounter,
+                                agentId = ag.id,
+                                newsList = newsList
+                            )
+                            agentStatuses[ag.id] = AgentLiveStatus(
+                                currentTask = nextTask,
+                                progress = 0.02f,
+                                targetZone = AgentLocationZone.DESK,
+                                breakTicksRemaining = 0,
+                                completedHistory = (listOf(finishedTask) + status.completedHistory).take(6)
+                            )
+                        }
+                    } else {
+                        agentStatuses[ag.id] = status.copy(progress = nextProg)
+                    }
                 }
             }
         }
     }
 
-    val animatedPositions = agents.map { ag ->
-        val mode = agentWorkStates[ag.id]?.mode ?: AgentActivityMode.WORKING
-        val targetX = when (mode) {
-            AgentActivityMode.WORKING -> ag.deskRx
-            AgentActivityMode.LOUNGE -> ag.loungeRx
-            AgentActivityMode.LUNCH -> ag.diningRx
-        }
-        val targetY = when (mode) {
-            AgentActivityMode.WORKING -> ag.deskRy
-            AgentActivityMode.LOUNGE -> ag.loungeRy
-            AgentActivityMode.LUNCH -> ag.diningRy
-        }
-        val animX by animateFloatAsState(
-            targetValue = targetX,
-            animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing),
-            label = "agentX_${ag.id}"
-        )
-        val animY by animateFloatAsState(
-            targetValue = targetY,
-            animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing),
-            label = "agentY_${ag.id}"
-        )
-        Offset(animX, animY)
-    }
-
-    val senderAgent = agents[activeDispatch.fromAgentId]
-    val receiverAgent = agents[activeDispatch.toAgentId]
     val inspectedAgent = agents[selectedAgentId]
-    val inspectedWork = agentWorkStates[selectedAgentId]
+    val inspectedStatus = agentStatuses[selectedAgentId]
 
-    val infiniteTransition = rememberInfiniteTransition(label = "officeLoungeWork")
-    val typingPhase by infiniteTransition.animateFloat(
+    val infiniteTransition = rememberInfiniteTransition(label = "officeAnimations")
+    val walkSwing by infiniteTransition.animateFloat(
         initialValue = -1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 320, easing = LinearEasing),
+            animation = tween(durationMillis = 280, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "typing8"
+        label = "legSwing"
     )
-    val tvGlowPhase by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.95f,
+    val typingHands by infiniteTransition.animateFloat(
+        initialValue = -1f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 360, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "tvGlow"
+        label = "handsType"
     )
-    val packetTravel by infiniteTransition.animateFloat(
+    val screenScanPhase by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 2400, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "packetTravel8"
+        label = "monitorLines"
     )
 
     Dialog(
@@ -2025,7 +2090,7 @@ fun AiOfficeLiveDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 14.dp),
+                .padding(horizontal = 10.dp, vertical = 12.dp),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.2.dp, primary.copy(alpha = 0.35f))
@@ -2033,7 +2098,7 @@ fun AiOfficeLiveDialog(
             Column(
                 modifier = Modifier
                     .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
+                    .padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
@@ -2044,7 +2109,7 @@ fun AiOfficeLiveDialog(
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "ИИ-Офис (8 агентов)",
+                                "ИИ-Кабинет",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -2055,7 +2120,7 @@ fun AiOfficeLiveDialog(
                                 color = Color(0xFF10B981).copy(alpha = 0.18f)
                             ) {
                                 Text(
-                                    text = if (isScanning) "АВРАЛ • ВСЕ ЗА СТОЛОМ" else "РАБОТА • ОБЕД • ТВ",
+                                    text = if (isScanning) "СБОР НОВОСТЕЙ" else "РАБОЧИЙ РЕЖИМ",
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFF10B981),
@@ -2064,7 +2129,7 @@ fun AiOfficeLiveDialog(
                             }
                         }
                         Text(
-                            "Сотрудники выполняют задачи, обедают в столовой и смотрят ТВ",
+                            "Нажмите на любого сотрудника или кабинет, чтобы посмотреть экран",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
                         )
@@ -2074,19 +2139,20 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
+                // Большая детализированная карта ИИ-офиса с комнатами, коридорами и мониторами
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(360.dp)
+                        .height(410.dp)
                         .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0xFF0A1412))
-                        .border(1.2.dp, primary.copy(alpha = 0.32f), RoundedCornerShape(18.dp))
+                        .background(Color(0xFF111827))
+                        .border(1.4.dp, primary.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
                         .pointerInput(Unit) {
                             detectTapGestures { tap ->
                                 val w = size.width.toFloat()
                                 val h = size.height.toFloat()
                                 val tapped = agents.minByOrNull { ag ->
-                                    val pos = animatedPositions[ag.id]
+                                    val pos = agentPositions[ag.id] ?: ag.deskChairPos
                                     val dx = tap.x - pos.x * w
                                     val dy = tap.y - pos.y * h
                                     dx * dx + dy * dy
@@ -2101,314 +2167,288 @@ fun AiOfficeLiveDialog(
                         val w = size.width
                         val h = size.height
 
-                        val tile = 24.dp.toPx()
-                        var x = tile
-                        while (x < w) {
-                            drawLine(Color.White.copy(alpha = 0.035f), Offset(x, 0f), Offset(x, h), 1f)
-                            x += tile
+                        // 1. Пол кабинетов (тёплый паркет/ламинат) и пол коридоров (плитка)
+                        drawRect(color = Color(0xFF1E2433), size = size)
+
+                        // Горизонтальный главный коридор (y: 0.32..0.68) и центральный вертикальный проход (x: 0.44..0.56)
+                        val hallTop = h * 0.32f
+                        val hallBottom = h * 0.68f
+                        drawRect(
+                            color = Color(0xFF151C28),
+                            topLeft = Offset(0f, hallTop),
+                            size = Size(w, hallBottom - hallTop)
+                        )
+
+                        // Плитка в коридорах
+                        val tileStep = 18.dp.toPx()
+                        var gx = tileStep
+                        while (gx < w) {
+                            drawLine(Color.White.copy(alpha = 0.04f), Offset(gx, hallTop), Offset(gx, hallBottom), 1f)
+                            gx += tileStep
                         }
-                        var y = tile
-                        while (y < h) {
-                            drawLine(Color.White.copy(alpha = 0.035f), Offset(0f, y), Offset(w, y), 1f)
-                            y += tile
+                        var gy = hallTop + tileStep
+                        while (gy < hallBottom) {
+                            drawLine(Color.White.copy(alpha = 0.04f), Offset(0f, gy), Offset(w, gy), 1f)
+                            gy += tileStep
                         }
 
-                        val zoneW = w * 0.22f
-                        val zoneH = h * 0.29f
-                        agents.forEach { ag ->
-                            val isSelected = ag.id == selectedAgentId
-                            val topLeft = Offset(ag.deskRx * w - zoneW / 2f, ag.deskRy * h - zoneH / 2f)
-                            drawRoundRect(
-                                color = ag.accentColor.copy(alpha = if (isSelected) 0.16f else 0.05f),
-                                topLeft = topLeft,
-                                size = Size(zoneW, zoneH),
-                                cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
+                        // Направляющая линия посередине коридора
+                        drawLine(
+                            color = Color(0xFF38BDF8).copy(alpha = 0.16f),
+                            start = Offset(w * 0.06f, h * 0.50f),
+                            end = Offset(w * 0.94f, h * 0.50f),
+                            strokeWidth = 1.5.dp.toPx(),
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f), 0f)
+                        )
+
+                        // 2. Стены и 6 кабинетов с дверными проёмами
+                        val wallColor = Color(0xFF475569)
+                        val wallThickness = 3.dp.toPx()
+                        val colWidth = w / 3f
+
+                        for (col in 0..2) {
+                            val left = col * colWidth
+                            val right = (col + 1) * colWidth
+                            val doorCenter = left + colWidth / 2f
+                            val doorHalf = 18.dp.toPx()
+
+                            val topAgent = agents[col]
+                            val isTopSel = topAgent.id == selectedAgentId
+                            // Подсветка пола выбранного верхнего кабинета
+                            drawRect(
+                                color = topAgent.accentColor.copy(alpha = if (isTopSel) 0.13f else 0.04f),
+                                topLeft = Offset(left + 2.dp.toPx(), 2.dp.toPx()),
+                                size = Size(colWidth - 4.dp.toPx(), hallTop - 4.dp.toPx())
                             )
-                            drawRoundRect(
-                                color = ag.accentColor.copy(alpha = if (isSelected) 0.85f else 0.22f),
-                                topLeft = topLeft,
-                                size = Size(zoneW, zoneH),
-                                cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx()),
-                                style = Stroke(width = if (isSelected) 1.6.dp.toPx() else 1.dp.toPx())
+                            // Окно на верхней стене кабинета
+                            drawRect(
+                                color = Color(0xFF38BDF8).copy(alpha = 0.45f),
+                                topLeft = Offset(left + colWidth * 0.25f, 1.dp.toPx()),
+                                size = Size(colWidth * 0.50f, 3.5.dp.toPx())
                             )
+                            // Перегородка и стена с дверным проёмом сверху
+                            drawLine(wallColor, Offset(right, 0f), Offset(right, hallTop), wallThickness)
+                            drawLine(wallColor, Offset(left, hallTop), Offset(doorCenter - doorHalf, hallTop), wallThickness)
+                            drawLine(wallColor, Offset(doorCenter + doorHalf, hallTop), Offset(right, hallTop), wallThickness)
+                            // Порог двери
+                            drawLine(topAgent.accentColor.copy(alpha = 0.45f), Offset(doorCenter - doorHalf, hallTop), Offset(doorCenter + doorHalf, hallTop), 1.5.dp.toPx())
+
+                            val botAgent = agents[col + 3]
+                            val isBotSel = botAgent.id == selectedAgentId
+                            // Подсветка пола нижнего кабинета
+                            drawRect(
+                                color = botAgent.accentColor.copy(alpha = if (isBotSel) 0.13f else 0.04f),
+                                topLeft = Offset(left + 2.dp.toPx(), hallBottom + 2.dp.toPx()),
+                                size = Size(colWidth - 4.dp.toPx(), h - hallBottom - 4.dp.toPx())
+                            )
+                            // Окно на нижней стене
+                            drawRect(
+                                color = Color(0xFF38BDF8).copy(alpha = 0.45f),
+                                topLeft = Offset(left + colWidth * 0.25f, h - 4.5.dp.toPx()),
+                                size = Size(colWidth * 0.50f, 3.5.dp.toPx())
+                            )
+                            // Перегородка и стена с дверным проёмом снизу
+                            drawLine(wallColor, Offset(right, hallBottom), Offset(right, h), wallThickness)
+                            drawLine(wallColor, Offset(left, hallBottom), Offset(doorCenter - doorHalf, hallBottom), wallThickness)
+                            drawLine(wallColor, Offset(doorCenter + doorHalf, hallBottom), Offset(right, hallBottom), wallThickness)
+                            drawLine(botAgent.accentColor.copy(alpha = 0.45f), Offset(doorCenter - doorHalf, hallBottom), Offset(doorCenter + doorHalf, hallBottom), 1.5.dp.toPx())
                         }
 
-                        // Лаунж-зона с диванчиками и телевизором
-                        val loungeLeft = w * 0.035f
-                        val loungeTop = h * 0.37f
-                        val loungeW = w * 0.45f
-                        val loungeH = h * 0.26f
+                        // 3. Зона столовой слева в центральном холле (x: 0.03..0.42, y: 0.39..0.63)
+                        val diningRect = Offset(w * 0.03f, h * 0.39f)
+                        val diningSize = Size(w * 0.39f, h * 0.24f)
                         drawRoundRect(
-                            color = Color(0xFF1E1B4B).copy(alpha = 0.45f),
-                            topLeft = Offset(loungeLeft, loungeTop),
-                            size = Size(loungeW, loungeH),
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                            color = Color(0xFF451A03).copy(alpha = 0.38f),
+                            topLeft = diningRect,
+                            size = diningSize,
+                            cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
                         )
                         drawRoundRect(
-                            color = Color(0xFF818CF8).copy(alpha = 0.35f),
-                            topLeft = Offset(loungeLeft, loungeTop),
-                            size = Size(loungeW, loungeH),
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                            color = Color(0xFFF59E0B).copy(alpha = 0.32f),
+                            topLeft = diningRect,
+                            size = diningSize,
+                            cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx()),
                             style = Stroke(width = 1.dp.toPx())
                         )
-
-                        val tvX = loungeLeft + loungeW * 0.22f
-                        val tvY = loungeTop + 7.dp.toPx()
-                        val tvW = loungeW * 0.56f
+                        // Кухонная стойка с кофемашиной слева
                         drawRoundRect(
-                            color = Color(0xFF0F172A),
-                            topLeft = Offset(tvX, tvY),
-                            size = Size(tvW, 7.dp.toPx()),
+                            color = Color(0xFF1E293B),
+                            topLeft = Offset(diningRect.x + 5.dp.toPx(), diningRect.y + 8.dp.toPx()),
+                            size = Size(12.dp.toPx(), diningSize.height - 16.dp.toPx()),
+                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                        )
+                        drawCircle(Color(0xFFEF4444), 2.5.dp.toPx(), Offset(diningRect.x + 11.dp.toPx(), diningRect.y + 18.dp.toPx()))
+                        drawCircle(Color(0xFF10B981), 2.5.dp.toPx(), Offset(diningRect.x + 11.dp.toPx(), diningRect.y + 28.dp.toPx()))
+
+                        // Обеденный стол и тарелки
+                        val dTableX = diningRect.x + 26.dp.toPx()
+                        val dTableY = diningRect.y + diningSize.height * 0.28f
+                        val dTableW = diningSize.width - 36.dp.toPx()
+                        val dTableH = 18.dp.toPx()
+                        drawRoundRect(
+                            color = Color(0xFF92400E),
+                            topLeft = Offset(dTableX, dTableY),
+                            size = Size(dTableW, dTableH),
+                            cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+                        )
+                        drawCircle(Color.White.copy(alpha = 0.85f), 2.8.dp.toPx(), Offset(dTableX + dTableW * 0.22f, dTableY + dTableH * 0.5f))
+                        drawCircle(Color.White.copy(alpha = 0.85f), 2.8.dp.toPx(), Offset(dTableX + dTableW * 0.52f, dTableY + dTableH * 0.5f))
+                        drawCircle(Color.White.copy(alpha = 0.85f), 2.8.dp.toPx(), Offset(dTableX + dTableW * 0.82f, dTableY + dTableH * 0.5f))
+
+                        // 4. Комната отдыха справа в центральном холле (x: 0.58..0.97, y: 0.39..0.63)
+                        val loungeRect = Offset(w * 0.58f, h * 0.39f)
+                        val loungeSize = Size(w * 0.39f, h * 0.24f)
+                        drawRoundRect(
+                            color = Color(0xFF1E1B4B).copy(alpha = 0.42f),
+                            topLeft = loungeRect,
+                            size = loungeSize,
+                            cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = Color(0xFF818CF8).copy(alpha = 0.32f),
+                            topLeft = loungeRect,
+                            size = loungeSize,
+                            cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx()),
+                            style = Stroke(width = 1.dp.toPx())
+                        )
+                        // Широкий телевизор на стенке комнаты отдыха с живой картинкой
+                        val tvLeft = loungeRect.x + loungeSize.width * 0.18f
+                        val tvWidth = loungeSize.width * 0.64f
+                        val tvTop = loungeRect.y + 6.dp.toPx()
+                        drawRoundRect(
+                            color = Color(0xFF090D16),
+                            topLeft = Offset(tvLeft, tvTop),
+                            size = Size(tvWidth, 8.dp.toPx()),
                             cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
                         )
                         drawLine(
-                            color = Color(0xFF38BDF8).copy(alpha = tvGlowPhase),
-                            start = Offset(tvX + 3.dp.toPx(), tvY + 7.dp.toPx()),
-                            end = Offset(tvX + tvW - 3.dp.toPx(), tvY + 7.dp.toPx()),
-                            strokeWidth = 2.5.dp.toPx(),
-                            cap = StrokeCap.Round
+                            color = Color(0xFF38BDF8),
+                            start = Offset(tvLeft + 3.dp.toPx(), tvTop + 8.dp.toPx()),
+                            end = Offset(tvLeft + tvWidth - 3.dp.toPx(), tvTop + 8.dp.toPx()),
+                            strokeWidth = 2.5.dp.toPx()
                         )
-
+                        // Журнальный столик и мягкий диван
                         drawRoundRect(
                             color = Color(0xFF334155),
-                            topLeft = Offset(loungeLeft + loungeW * 0.34f, loungeTop + loungeH * 0.33f),
-                            size = Size(loungeW * 0.32f, 12.dp.toPx()),
-                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                        )
-
-                        val sofaX = loungeLeft + loungeW * 0.12f
-                        val sofaY = loungeTop + loungeH * 0.64f
-                        val sofaW = loungeW * 0.76f
-                        val sofaH = 22.dp.toPx()
-                        drawRoundRect(
-                            color = Color(0xFF4F46E5).copy(alpha = 0.65f),
-                            topLeft = Offset(sofaX, sofaY),
-                            size = Size(sofaW, sofaH),
-                            cornerRadius = CornerRadius(7.dp.toPx(), 7.dp.toPx())
-                        )
-                        drawRoundRect(
-                            color = Color(0xFF3730A3),
-                            topLeft = Offset(sofaX, sofaY + sofaH - 6.dp.toPx()),
-                            size = Size(sofaW, 6.dp.toPx()),
+                            topLeft = Offset(loungeRect.x + loungeSize.width * 0.32f, loungeRect.y + loungeSize.height * 0.34f),
+                            size = Size(loungeSize.width * 0.36f, 9.dp.toPx()),
                             cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
                         )
-
-                        // Столовая с обеденным столом и кухней
-                        val diningLeft = w * 0.515f
-                        val diningTop = h * 0.37f
-                        val diningW = w * 0.45f
-                        val diningH = h * 0.26f
                         drawRoundRect(
-                            color = Color(0xFF422006).copy(alpha = 0.42f),
-                            topLeft = Offset(diningLeft, diningTop),
-                            size = Size(diningW, diningH),
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
-                        )
-                        drawRoundRect(
-                            color = Color(0xFFF59E0B).copy(alpha = 0.35f),
-                            topLeft = Offset(diningLeft, diningTop),
-                            size = Size(diningW, diningH),
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
-                            style = Stroke(width = 1.dp.toPx())
-                        )
-
-                        drawRoundRect(
-                            color = Color(0xFF1E293B),
-                            topLeft = Offset(diningLeft + diningW - 18.dp.toPx(), diningTop + 10.dp.toPx()),
-                            size = Size(12.dp.toPx(), diningH - 20.dp.toPx()),
-                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                        )
-                        drawCircle(
-                            color = Color(0xFF38BDF8),
-                            radius = 3.5.dp.toPx(),
-                            center = Offset(diningLeft + diningW - 12.dp.toPx(), diningTop + 22.dp.toPx())
-                        )
-                        drawCircle(
-                            color = Color(0xFFFBBF24),
-                            radius = 3.5.dp.toPx(),
-                            center = Offset(diningLeft + diningW - 12.dp.toPx(), diningTop + diningH - 22.dp.toPx())
-                        )
-
-                        val tableX = diningLeft + diningW * 0.16f
-                        val tableY = diningTop + diningH * 0.36f
-                        val tableW = diningW * 0.54f
-                        val tableH = 24.dp.toPx()
-                        drawRoundRect(
-                            color = Color(0xFF78350F),
-                            topLeft = Offset(tableX, tableY),
-                            size = Size(tableW, tableH),
+                            color = Color(0xFF4338CA),
+                            topLeft = Offset(loungeRect.x + 12.dp.toPx(), loungeRect.y + loungeSize.height * 0.64f),
+                            size = Size(loungeSize.width - 24.dp.toPx(), 18.dp.toPx()),
                             cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
                         )
-                        drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(tableX + tableW * 0.28f, tableY + 7.dp.toPx()))
-                        drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(tableX + tableW * 0.72f, tableY + 7.dp.toPx()))
-                        drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(tableX + tableW * 0.28f, tableY + tableH - 7.dp.toPx()))
-                        drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(tableX + tableW * 0.72f, tableY + tableH - 7.dp.toPx()))
 
+                        // 5. Детальные рабочие столы, системные блоки, растения и МОНИТОРЫ С ЖИВЫМ КОДОМ/ГРАФИКАМИ
                         agents.forEach { ag ->
-                            drawFixedDeskStation(
-                                deskAnchorPos = Offset(ag.deskRx * w, ag.deskRy * h),
-                                deskAbove = ag.deskAbove,
-                                accentColor = ag.accentColor
+                            val status = agentStatuses[ag.id]
+                            val isAtDesk = status?.targetZone == AgentLocationZone.DESK && !(agentWalkingFlags[ag.id] ?: false)
+                            drawDetailedWorkstation(
+                                chairAnchor = Offset(ag.deskChairPos.x * w, ag.deskChairPos.y * h),
+                                isTopRow = ag.isTopRow,
+                                accentColor = ag.accentColor,
+                                isActiveWork = isAtDesk,
+                                progress = status?.progress ?: 0.5f,
+                                scanPhase = screenScanPhase
                             )
                         }
 
+                        // 6. Детально прорисованные человечки (голова, причёска, торс, руки, шагающие ножки)
                         agents.forEach { ag ->
-                            val mode = agentWorkStates[ag.id]?.mode ?: AgentActivityMode.WORKING
-                            val animPos = animatedPositions[ag.id]
-                            val px = animPos.x * w
-                            val py = animPos.y * h
-                            val isSelected = ag.id == selectedAgentId
-                            val handShift = if (mode == AgentActivityMode.WORKING) typingPhase * 1.8.dp.toPx() else 0f
+                            val pos = agentPositions[ag.id] ?: ag.deskChairPos
+                            val isWalking = agentWalkingFlags[ag.id] ?: false
+                            val status = agentStatuses[ag.id]
+                            val zone = status?.targetZone ?: AgentLocationZone.DESK
 
-                            drawDynamicOfficePerson(
-                                personPos = Offset(px, py),
-                                deskAbove = ag.deskAbove,
-                                mode = mode,
+                            drawDetailedHumanAgent(
+                                center = Offset(pos.x * w, pos.y * h),
+                                isTopRow = ag.isTopRow,
+                                zone = zone,
+                                isWalking = isWalking,
                                 shirtColor = ag.accentColor,
-                                handOffset = handShift,
-                                isHighlighted = isSelected
+                                hairColor = ag.hairColor,
+                                walkPhase = walkSwing,
+                                typePhase = typingHands,
+                                isSelected = ag.id == selectedAgentId
                             )
                         }
-
-                        val start = Offset(animatedPositions[senderAgent.id].x * w, animatedPositions[senderAgent.id].y * h)
-                        val end = Offset(animatedPositions[receiverAgent.id].x * w, animatedPositions[receiverAgent.id].y * h)
-                        drawLine(
-                            color = senderAgent.accentColor.copy(alpha = 0.75f),
-                            start = start,
-                            end = end,
-                            strokeWidth = 1.8.dp.toPx(),
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
-                        )
-
-                        val angle = atan2(end.y - start.y, end.x - start.x)
-                        val arrowLen = 8.dp.toPx()
-                        val tip = Offset(
-                            end.x - 15.dp.toPx() * cos(angle),
-                            end.y - 15.dp.toPx() * sin(angle)
-                        )
-                        val arrowPath = Path().apply {
-                            moveTo(tip.x, tip.y)
-                            lineTo(
-                                tip.x - arrowLen * cos(angle - 0.45f),
-                                tip.y - arrowLen * sin(angle - 0.45f)
-                            )
-                            lineTo(
-                                tip.x - arrowLen * cos(angle + 0.45f),
-                                tip.y - arrowLen * sin(angle + 0.45f)
-                            )
-                            close()
-                        }
-                        drawPath(arrowPath, color = senderAgent.accentColor)
-
-                        val packetX = start.x + (end.x - start.x) * packetTravel
-                        val packetY = start.y + (end.y - start.y) * packetTravel
-                        drawCircle(
-                            color = Color.White,
-                            radius = 4.5.dp.toPx(),
-                            center = Offset(packetX, packetY)
-                        )
-                        drawCircle(
-                            color = senderAgent.accentColor,
-                            radius = 2.8.dp.toPx(),
-                            center = Offset(packetX, packetY)
-                        )
                     }
 
-                    // Верхний ряд имён
+                    // Подписи верхних кабинетов
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.TopCenter)
-                            .padding(top = 6.dp, start = 6.dp, end = 6.dp),
+                            .padding(top = 6.dp),
                         horizontalArrangement = Arrangement.SpaceAround
                     ) {
-                        agents.take(4).forEach { ag ->
+                        agents.take(3).forEach { ag ->
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(ag.name, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = ag.accentColor)
-                                Text(ag.role, fontSize = 8.sp, color = Color.White.copy(alpha = 0.65f))
+                                Text(ag.name, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = ag.accentColor)
+                                Text(ag.role, fontSize = 8.sp, color = Color.White.copy(alpha = 0.72f))
                             }
                         }
                     }
 
-                    // Подписи центральных зон (Лаунж и Столовая)
+                    // Подписи столовой и комнаты отдыха в центральном коридоре
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.Center)
-                            .padding(horizontal = 20.dp),
+                            .padding(horizontal = 18.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Лаунж • Диван и ТВ", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color(0xFFA5B4FC))
-                        Text("Столовая и кофе", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFCD34D))
+                        Text(
+                            "Столовая",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFCD34D),
+                            modifier = Modifier.padding(top = 42.dp)
+                        )
+                        Text(
+                            "Комната отдыха • ТВ",
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFA5B4FC),
+                            modifier = Modifier.padding(top = 42.dp)
+                        )
                     }
 
-                    // Нижний ряд имён + бабл задачи
-                    Column(
+                    // Подписи нижних кабинетов
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 5.dp, start = 6.dp, end = 6.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                            .padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceAround
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceAround
-                        ) {
-                            agents.drop(4).forEach { ag ->
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(ag.name, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = ag.accentColor)
-                                    Text(ag.role, fontSize = 8.sp, color = Color.White.copy(alpha = 0.65f))
-                                }
-                            }
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(9.dp),
-                            color = Color(0xFF0F2620).copy(alpha = 0.95f),
-                            border = BorderStroke(1.dp, senderAgent.accentColor.copy(alpha = 0.75f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = senderAgent.name,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = senderAgent.accentColor
-                                )
-                                Icon(
-                                    imageVector = Icons.Default.ArrowForward,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(10.dp)
-                                )
-                                Text(
-                                    text = "${receiverAgent.name}: #${activeDispatch.ticketNumber} ${activeDispatch.badge}",
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White
-                                )
+                        agents.drop(3).forEach { ag ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(ag.name, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = ag.accentColor)
+                                Text(ag.role, fontSize = 8.sp, color = Color.White.copy(alpha = 0.72f))
                             }
                         }
                     }
                 }
 
+                // Селектор 6 сотрудников
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    agents.chunked(4).forEach { rowAgents ->
+                    agents.chunked(3).forEach { rowAgents ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             rowAgents.forEach { ag ->
                                 val isSel = selectedAgentId == ag.id
-                                val workState = agentWorkStates[ag.id]
-                                val statusText = when (workState?.mode) {
-                                    AgentActivityMode.LUNCH -> "Обед"
-                                    AgentActivityMode.LOUNGE -> "У ТВ"
-                                    else -> "✓ ${workState?.completedTasks?.size ?: 0}"
+                                val st = agentStatuses[ag.id]
+                                val isWalking = agentWalkingFlags[ag.id] ?: false
+                                val stateLabel = when {
+                                    isWalking -> "Идёт по коридору"
+                                    st?.targetZone == AgentLocationZone.DINING -> "В столовой"
+                                    st?.targetZone == AgentLocationZone.LOUNGE -> "У телевизора"
+                                    else -> "За ПК • ${((st?.progress ?: 0f) * 100).toInt()}%"
                                 }
                                 Surface(
                                     modifier = Modifier
@@ -2424,20 +2464,21 @@ fun AiOfficeLiveDialog(
                                     )
                                 ) {
                                     Column(
-                                        modifier = Modifier.padding(vertical = 5.dp, horizontal = 3.dp),
+                                        modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         Text(
                                             text = ag.name,
-                                            fontSize = 10.sp,
+                                            fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = if (isSel) ag.accentColor else MaterialTheme.colorScheme.onSurface,
                                             maxLines = 1
                                         )
                                         Text(
-                                            text = statusText,
+                                            text = stateLabel,
                                             fontSize = 9.sp,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.68f),
+                                            maxLines = 1
                                         )
                                     }
                                 }
@@ -2446,7 +2487,9 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                if (inspectedWork != null) {
+                // Карточка выбранного сотрудника и его экрана монитора
+                if (inspectedStatus != null) {
+                    val isWalking = agentWalkingFlags[selectedAgentId] ?: false
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = inspectedAgent.accentColor.copy(alpha = 0.1f),
@@ -2462,16 +2505,16 @@ fun AiOfficeLiveDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "${inspectedAgent.name} • ${inspectedAgent.role}",
+                                    text = "${inspectedAgent.name} • ${inspectedAgent.roomTitle}",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = inspectedAgent.accentColor
                                 )
                                 Text(
-                                    text = when (inspectedWork.mode) {
-                                        AgentActivityMode.LUNCH -> "Обедает в столовой"
-                                        AgentActivityMode.LOUNGE -> "Отдыхает на диване у ТВ"
-                                        AgentActivityMode.WORKING -> "#${inspectedWork.activeTask.ticketNumber} • ${(inspectedWork.progress * 100).toInt()}%"
+                                    text = when {
+                                        isWalking -> "Идёт по коридору"
+                                        inspectedStatus.targetZone != AgentLocationZone.DESK -> inspectedStatus.targetZone.label
+                                        else -> "Задача #${inspectedStatus.currentTask.ticketNumber} • ${(inspectedStatus.progress * 100).toInt()}%"
                                     },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
@@ -2480,18 +2523,19 @@ fun AiOfficeLiveDialog(
                             }
 
                             Text(
-                                text = when (inspectedWork.mode) {
-                                    AgentActivityMode.LUNCH -> "Перерыв на обед: пьёт кофе и восстанавливает силы после закрытия задачи."
-                                    AgentActivityMode.LOUNGE -> "Перерыв в лаунж-зоне: сидит на диване и смотрит техно-обзоры по телевизору."
-                                    AgentActivityMode.WORKING -> "В работе: ${inspectedWork.activeTask.title}"
+                                text = when {
+                                    isWalking -> "Направляется по коридору: ${inspectedStatus.targetZone.label.lowercase()}."
+                                    inspectedStatus.targetZone == AgentLocationZone.DINING -> "Перерыв на обед: пьёт кофе в столовой перед следующей проверкой источников."
+                                    inspectedStatus.targetZone == AgentLocationZone.LOUNGE -> "Отдых в комнате отдыха: смотрит техно-канал по телевизору."
+                                    else -> "На экране монитора: ${inspectedStatus.currentTask.title}"
                                 },
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f)
                             )
 
-                            if (inspectedWork.mode == AgentActivityMode.WORKING) {
+                            if (inspectedStatus.targetZone == AgentLocationZone.DESK && !isWalking) {
                                 LinearProgressIndicator(
-                                    progress = { inspectedWork.progress.coerceIn(0f, 1f) },
+                                    progress = { inspectedStatus.progress.coerceIn(0f, 1f) },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(6.dp)
@@ -2504,13 +2548,13 @@ fun AiOfficeLiveDialog(
                             HorizontalDivider(color = inspectedAgent.accentColor.copy(alpha = 0.2f))
 
                             Text(
-                                text = "Выполненные задачи (${inspectedWork.completedTasks.size}):",
+                                text = "Самостоятельно выполнено (${inspectedStatus.completedHistory.size}):",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                             )
 
-                            inspectedWork.completedTasks.take(3).forEach { done ->
+                            inspectedStatus.completedHistory.take(3).forEach { done ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.Top,
@@ -2531,7 +2575,7 @@ fun AiOfficeLiveDialog(
                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f)
                                         )
                                         Text(
-                                            text = "Выполнено в ${done.completedAt}",
+                                            text = "Завершено в ${done.completedAt}",
                                             fontSize = 9.sp,
                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                                         )
@@ -2555,7 +2599,7 @@ fun AiOfficeLiveDialog(
                     Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = if (isScanning) "Все 8 агентов за работой..." else "Запустить общий сбор новостей (8 агентов)",
+                        text = if (isScanning) "Агенты собирают свежие новости..." else "Обновить новости по всем кабинетам",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -2565,115 +2609,317 @@ fun AiOfficeLiveDialog(
     }
 }
 
-private fun DrawScope.drawFixedDeskStation(
-    deskAnchorPos: Offset,
-    deskAbove: Boolean,
-    accentColor: Color
+private fun DrawScope.drawDetailedWorkstation(
+    chairAnchor: Offset,
+    isTopRow: Boolean,
+    accentColor: Color,
+    isActiveWork: Boolean,
+    progress: Float,
+    scanPhase: Float
 ) {
-    val dir = if (deskAbove) -1f else 1f
-    val deskW = 40.dp.toPx()
-    val deskH = 15.dp.toPx()
-    val deskCenterY = deskAnchorPos.y + dir * 15.dp.toPx()
+    // Для верхнего ряда стол стоит выше кресла (dir = -1), для нижнего — ниже кресла (dir = +1)
+    val dir = if (isTopRow) -1f else 1f
+    val deskW = 58.dp.toPx()
+    val deskH = 22.dp.toPx()
+    val deskCenterY = chairAnchor.y + dir * 18.dp.toPx()
 
-    val chairCenterY = deskAnchorPos.y - dir * 8.dp.toPx()
-    drawRoundRect(
+    // Офисное кресло на колёсиках
+    drawCircle(
         color = Color(0xFF334155),
-        topLeft = Offset(deskAnchorPos.x - 9.dp.toPx(), chairCenterY - 4.dp.toPx()),
-        size = Size(18.dp.toPx(), 8.dp.toPx()),
-        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
-    )
-
-    drawRoundRect(
-        color = Color(0xFF1E293B),
-        topLeft = Offset(deskAnchorPos.x - deskW / 2f, deskCenterY - deskH / 2f),
-        size = Size(deskW, deskH),
-        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+        radius = 8.5.dp.toPx(),
+        center = chairAnchor
     )
     drawRoundRect(
         color = Color(0xFF475569),
-        topLeft = Offset(deskAnchorPos.x - deskW / 2f, deskCenterY - deskH / 2f),
+        topLeft = Offset(chairAnchor.x - 9.dp.toPx(), chairAnchor.y - dir * 6.dp.toPx() - 2.dp.toPx()),
+        size = Size(18.dp.toPx(), 4.dp.toPx()),
+        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+    )
+
+    // Комнатное растение в горшке в углу кабинета
+    val plantX = chairAnchor.x + 33.dp.toPx()
+    val plantY = deskCenterY + dir * 2.dp.toPx()
+    drawCircle(Color(0xFF78350F), 4.5.dp.toPx(), Offset(plantX, plantY))
+    drawCircle(Color(0xFF059669), 5.5.dp.toPx(), Offset(plantX - 1.5.dp.toPx(), plantY - 1.5.dp.toPx()))
+    drawCircle(Color(0xFF10B981), 4.dp.toPx(), Offset(plantX + 2.dp.toPx(), plantY + 1.dp.toPx()))
+
+    // Столешница
+    val deskTopLeft = Offset(chairAnchor.x - deskW / 2f, deskCenterY - deskH / 2f)
+    drawRoundRect(
+        color = Color(0xFF273142),
+        topLeft = deskTopLeft,
         size = Size(deskW, deskH),
-        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
+        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+    )
+    drawRoundRect(
+        color = Color(0xFF64748B).copy(alpha = 0.55f),
+        topLeft = deskTopLeft,
+        size = Size(deskW, deskH),
+        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
         style = Stroke(width = 1.dp.toPx())
     )
 
-    val monitorY = deskCenterY + dir * 2.dp.toPx()
-    drawLine(
-        color = accentColor,
-        start = Offset(deskAnchorPos.x - 10.dp.toPx(), monitorY),
-        end = Offset(deskAnchorPos.x + 10.dp.toPx(), monitorY),
-        strokeWidth = 2.5.dp.toPx(),
-        cap = StrokeCap.Round
+    // Системный блок справа на столе
+    drawRoundRect(
+        color = Color(0xFF0F172A),
+        topLeft = Offset(chairAnchor.x + deskW / 2f - 10.dp.toPx(), deskCenterY - 7.dp.toPx()),
+        size = Size(7.dp.toPx(), 14.dp.toPx()),
+        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
     )
+    drawCircle(
+        color = if (isActiveWork) Color(0xFF10B981) else Color(0xFFF59E0B),
+        radius = 1.4.dp.toPx(),
+        center = Offset(chairAnchor.x + deskW / 2f - 6.5.dp.toPx(), deskCenterY - 3.dp.toPx())
+    )
+
+    // Клавиатура и мышка ближе к человеку
+    val kbY = deskCenterY - dir * 5.5.dp.toPx()
+    drawRoundRect(
+        color = Color(0xFF0F172A),
+        topLeft = Offset(chairAnchor.x - 13.dp.toPx(), kbY - 2.2.dp.toPx()),
+        size = Size(20.dp.toPx(), 4.4.dp.toPx()),
+        cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+    )
+    drawRoundRect(
+        color = Color(0xFF94A3B8),
+        topLeft = Offset(chairAnchor.x + 10.dp.toPx(), kbY - 1.8.dp.toPx()),
+        size = Size(3.5.dp.toPx(), 4.5.dp.toPx()),
+        cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+    )
+
+    // Большой монитор с видимым экраном (на нём видны бегущие строки кода, графики и прогресс!)
+    val monW = 30.dp.toPx()
+    val monH = 11.dp.toPx()
+    val monCenterY = deskCenterY + dir * 4.5.dp.toPx()
+    val monTopLeft = Offset(chairAnchor.x - monW / 2f - 2.dp.toPx(), monCenterY - monH / 2f)
+
+    // Корпус монитора
+    drawRoundRect(
+        color = Color(0xFF090D16),
+        topLeft = monTopLeft,
+        size = Size(monW, monH),
+        cornerRadius = CornerRadius(2.5.dp.toPx(), 2.5.dp.toPx())
+    )
+    drawRoundRect(
+        color = if (isActiveWork) accentColor else Color(0xFF475569),
+        topLeft = monTopLeft,
+        size = Size(monW, monH),
+        cornerRadius = CornerRadius(2.5.dp.toPx(), 2.5.dp.toPx()),
+        style = Stroke(width = 1.dp.toPx())
+    )
+
+    // Внутренний дисплей с живым контентом
+    val scrLeft = monTopLeft.x + 2.dp.toPx()
+    val scrTop = monTopLeft.y + 2.dp.toPx()
+    val scrW = monW - 4.dp.toPx()
+    val scrH = monH - 4.dp.toPx()
+    drawRect(
+        color = if (isActiveWork) accentColor.copy(alpha = 0.16f) else Color(0xFF1E293B),
+        topLeft = Offset(scrLeft, scrTop),
+        size = Size(scrW, scrH)
+    )
+
+    if (isActiveWork) {
+        // Строки текста/кода слева на экране монитора
+        val line1W = scrW * (0.35f + 0.25f * sin(scanPhase * 6.28f).let { abs(it) })
+        val line2W = scrW * (0.28f + 0.30f * cos(scanPhase * 6.28f).let { abs(it) })
+        drawLine(
+            color = accentColor,
+            start = Offset(scrLeft + 1.5.dp.toPx(), scrTop + 2.dp.toPx()),
+            end = Offset(scrLeft + 1.5.dp.toPx() + line1W, scrTop + 2.dp.toPx()),
+            strokeWidth = 1.3.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = Color.White.copy(alpha = 0.85f),
+            start = Offset(scrLeft + 1.5.dp.toPx(), scrTop + 4.2.dp.toPx()),
+            end = Offset(scrLeft + 1.5.dp.toPx() + line2W, scrTop + 4.2.dp.toPx()),
+            strokeWidth = 1.3.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        // Полоска прогресса задачи внизу экрана монитора
+        drawLine(
+            color = Color(0xFF34D399),
+            start = Offset(scrLeft + 1.5.dp.toPx(), scrTop + scrH - 1.2.dp.toPx()),
+            end = Offset(scrLeft + 1.5.dp.toPx() + (scrW - 3.dp.toPx()) * progress.coerceIn(0.1f, 1f), scrTop + scrH - 1.2.dp.toPx()),
+            strokeWidth = 1.4.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    } else {
+        // Заставка ожидания, когда сотрудник ушёл на обед или в комнату отдыха
+        drawCircle(
+            color = Color(0xFFF59E0B).copy(alpha = 0.75f),
+            radius = 1.6.dp.toPx(),
+            center = Offset(scrLeft + scrW / 2f, scrTop + scrH / 2f)
+        )
+    }
 }
 
-private fun DrawScope.drawDynamicOfficePerson(
-    personPos: Offset,
-    deskAbove: Boolean,
-    mode: AgentActivityMode,
+private fun DrawScope.drawDetailedHumanAgent(
+    center: Offset,
+    isTopRow: Boolean,
+    zone: AgentLocationZone,
+    isWalking: Boolean,
     shirtColor: Color,
-    handOffset: Float,
-    isHighlighted: Boolean
+    hairColor: Color,
+    walkPhase: Float,
+    typePhase: Float,
+    isSelected: Boolean
 ) {
-    val dir = when (mode) {
-        AgentActivityMode.WORKING -> if (deskAbove) -1f else 1f
-        AgentActivityMode.LOUNGE -> -1f
-        AgentActivityMode.LUNCH -> 0f
-    }
-
-    if (isHighlighted) {
+    // Выделение выбранного сотрудника
+    if (isSelected) {
         drawCircle(
-            color = shirtColor.copy(alpha = 0.28f),
-            radius = 16.dp.toPx(),
-            center = personPos
+            color = shirtColor.copy(alpha = 0.24f),
+            radius = 18.dp.toPx(),
+            center = center
+        )
+        drawCircle(
+            color = shirtColor.copy(alpha = 0.75f),
+            radius = 18.dp.toPx(),
+            center = center,
+            style = Stroke(width = 1.2.dp.toPx())
         )
     }
 
+    val skinColor = Color(0xFFFDE68A)
+    val pantsColor = Color(0xFF1E293B)
+    val shoeColor = Color(0xFF090D16)
+
+    // 1. НОЖКИ И БОТИНКИ (шагают при ходьбе по коридору, либо аккуратно стоят/сидят)
+    if (isWalking) {
+        val leftStep = walkPhase * 4.5.dp.toPx()
+        val rightStep = -walkPhase * 4.5.dp.toPx()
+
+        // Левая нога
+        drawLine(
+            color = pantsColor,
+            start = Offset(center.x - 3.dp.toPx(), center.y + 4.dp.toPx()),
+            end = Offset(center.x - 3.5.dp.toPx(), center.y + 11.dp.toPx() + leftStep),
+            strokeWidth = 3.2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawCircle(shoeColor, 2.dp.toPx(), Offset(center.x - 3.5.dp.toPx(), center.y + 11.5.dp.toPx() + leftStep))
+
+        // Правая нога
+        drawLine(
+            color = pantsColor,
+            start = Offset(center.x + 3.dp.toPx(), center.y + 4.dp.toPx()),
+            end = Offset(center.x + 3.5.dp.toPx(), center.y + 11.dp.toPx() + rightStep),
+            strokeWidth = 3.2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawCircle(shoeColor, 2.dp.toPx(), Offset(center.x + 3.5.dp.toPx(), center.y + 11.5.dp.toPx() + rightStep))
+    } else if (zone == AgentLocationZone.LOUNGE) {
+        // Сидит на диване в комнате отдыха (коленки вытянуты вперёд)
+        drawLine(
+            color = pantsColor,
+            start = Offset(center.x - 3.5.dp.toPx(), center.y + 3.dp.toPx()),
+            end = Offset(center.x - 3.5.dp.toPx(), center.y + 8.dp.toPx()),
+            strokeWidth = 3.2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = pantsColor,
+            start = Offset(center.x + 3.5.dp.toPx(), center.y + 3.dp.toPx()),
+            end = Offset(center.x + 3.5.dp.toPx(), center.y + 8.dp.toPx()),
+            strokeWidth = 3.2.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    } else if (zone == AgentLocationZone.DINING) {
+        // Стоит/сидит у обеденного стола
+        drawLine(
+            color = pantsColor,
+            start = Offset(center.x - 3.dp.toPx(), center.y + 4.dp.toPx()),
+            end = Offset(center.x - 3.dp.toPx(), center.y + 10.dp.toPx()),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = pantsColor,
+            start = Offset(center.x + 3.dp.toPx(), center.y + 4.dp.toPx()),
+            end = Offset(center.x + 3.dp.toPx(), center.y + 10.dp.toPx()),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    }
+
+    // 2. ТОРС И ПЛЕЧИ В РУБАШКЕ
     drawRoundRect(
         color = shirtColor,
-        topLeft = Offset(personPos.x - 9.dp.toPx(), personPos.y - 5.dp.toPx()),
-        size = Size(18.dp.toPx(), 10.dp.toPx()),
-        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+        topLeft = Offset(center.x - 7.5.dp.toPx(), center.y - 4.5.dp.toPx()),
+        size = Size(15.dp.toPx(), 10.dp.toPx()),
+        cornerRadius = CornerRadius(4.5.dp.toPx(), 4.5.dp.toPx())
     )
 
-    if (mode == AgentActivityMode.WORKING) {
-        val deskCenterY = personPos.y + dir * 15.dp.toPx()
-        val kbY = deskCenterY - dir * 4.dp.toPx()
+    // 3. РУКИ (печатают по клавиатуре / машут при ходьбе / держат кружку кофе в столовой)
+    if (zone == AgentLocationZone.DESK && !isWalking) {
+        val dir = if (isTopRow) -1f else 1f
+        val kbReachY = center.y + dir * 12.5.dp.toPx()
+        val shift = typePhase * 1.6.dp.toPx()
         drawLine(
-            color = Color(0xFFFDE68A),
-            start = Offset(personPos.x - 7.dp.toPx(), personPos.y + dir * 3.dp.toPx()),
-            end = Offset(personPos.x - 4.dp.toPx(), kbY + handOffset),
+            color = skinColor,
+            start = Offset(center.x - 6.5.dp.toPx(), center.y + dir * 2.dp.toPx()),
+            end = Offset(center.x - 4.dp.toPx(), kbReachY + shift),
+            strokeWidth = 2.6.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = skinColor,
+            start = Offset(center.x + 6.5.dp.toPx(), center.y + dir * 2.dp.toPx()),
+            end = Offset(center.x + 4.dp.toPx(), kbReachY - shift),
+            strokeWidth = 2.6.dp.toPx(),
+            cap = StrokeCap.Round
+        )
+    } else if (isWalking) {
+        val armSwing = -walkPhase * 3.dp.toPx()
+        drawLine(
+            color = skinColor,
+            start = Offset(center.x - 7.5.dp.toPx(), center.y - 1.dp.toPx()),
+            end = Offset(center.x - 8.5.dp.toPx(), center.y + 4.dp.toPx() + armSwing),
             strokeWidth = 2.5.dp.toPx(),
             cap = StrokeCap.Round
         )
         drawLine(
-            color = Color(0xFFFDE68A),
-            start = Offset(personPos.x + 7.dp.toPx(), personPos.y + dir * 3.dp.toPx()),
-            end = Offset(personPos.x + 4.dp.toPx(), kbY - handOffset),
+            color = skinColor,
+            start = Offset(center.x + 7.5.dp.toPx(), center.y - 1.dp.toPx()),
+            end = Offset(center.x + 8.5.dp.toPx(), center.y + 4.dp.toPx() - armSwing),
             strokeWidth = 2.5.dp.toPx(),
             cap = StrokeCap.Round
         )
-    } else if (mode == AgentActivityMode.LUNCH) {
-        drawCircle(
-            color = Color(0xFFFBBF24),
-            radius = 2.8.dp.toPx(),
-            center = Offset(personPos.x + 9.dp.toPx(), personPos.y + 3.dp.toPx())
+    } else if (zone == AgentLocationZone.DINING) {
+        // Держит кружку кофе в столовой
+        drawLine(
+            color = skinColor,
+            start = Offset(center.x + 6.dp.toPx(), center.y),
+            end = Offset(center.x + 9.5.dp.toPx(), center.y - 3.dp.toPx()),
+            strokeWidth = 2.5.dp.toPx(),
+            cap = StrokeCap.Round
         )
+        drawCircle(Color(0xFFFBBF24), 2.4.dp.toPx(), Offset(center.x + 10.dp.toPx(), center.y - 3.5.dp.toPx()))
     }
 
+    // 4. ГОЛОВА, ПРИЧЁСКА И ГЛАЗА (повернуты к монитору или к телевизору)
+    val headCenter = Offset(center.x, center.y - 7.dp.toPx())
     drawCircle(
-        color = Color(0xFFFDE68A),
-        radius = 5.5.dp.toPx(),
-        center = personPos
+        color = skinColor,
+        radius = 5.2.dp.toPx(),
+        center = headCenter
     )
+    // Причёска сверху головы
     drawArc(
-        color = Color(0xFF1E293B),
-        startAngle = if (dir <= 0f) 0f else 180f,
+        color = hairColor,
+        startAngle = 180f,
         sweepAngle = 180f,
         useCenter = true,
-        topLeft = Offset(personPos.x - 5.5.dp.toPx(), personPos.y - 5.5.dp.toPx()),
-        size = Size(11.dp.toPx(), 11.dp.toPx())
+        topLeft = Offset(headCenter.x - 5.2.dp.toPx(), headCenter.y - 5.2.dp.toPx()),
+        size = Size(10.4.dp.toPx(), 10.4.dp.toPx())
     )
+    // Глазки, когда сотрудник смотрит на нас (нижний ряд за столом или в холле)
+    val lookingBack = zone == AgentLocationZone.DESK && isTopRow && !isWalking
+    if (!lookingBack) {
+        drawCircle(Color(0xFF0F172A), 0.9.dp.toPx(), Offset(headCenter.x - 1.8.dp.toPx(), headCenter.y + 0.5.dp.toPx()))
+        drawCircle(Color(0xFF0F172A), 0.9.dp.toPx(), Offset(headCenter.x + 1.8.dp.toPx(), headCenter.y + 0.5.dp.toPx()))
+    }
 }
 
 @Composable
