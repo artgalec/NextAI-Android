@@ -275,25 +275,22 @@ object NewsRepository {
         val html = fetchUrl(wp.url) ?: return emptyList()
         val doc = Jsoup.parse(html, wp.url)
         val regex = Regex(wp.linkRegex)
-        val seen = mutableSetOf<String>()
-        val list = mutableListOf<NewsItem>()
 
-        for (a in doc.select("a[href]")) {
-            val absUrl = a.absUrl("href")
-            if (absUrl.isBlank() || absUrl == wp.url || seen.contains(absUrl)) continue
-            if (!regex.containsMatchIn(absUrl)) continue
-            seen.add(absUrl)
-
-            var title = a.text().replace(Regex("\\s+"), " ").trim()
-            if (title.length < 10) {
-                val slug = URI(absUrl).path.trimEnd('/').substringAfterLast('/')
-                    .replace(Regex("^\\d+-"), "")
-                    .replace("-", " ")
-                    .trim()
-                title = if (slug.length > 8) slug.replaceFirstChar { it.uppercase() } else "Публикация на ${wp.name}"
-            }
-            val ts = System.currentTimeMillis() - (list.size * 20 + 10) * 60_000L
-            list.add(
+        return doc.select("a[href]")
+            .map { it to it.absUrl("href") }
+            .filter { (_, absUrl) -> absUrl.isNotBlank() && absUrl != wp.url && regex.containsMatchIn(absUrl) }
+            .distinctBy { (_, absUrl) -> absUrl }
+            .take(5)
+            .mapIndexed { idx, (a, absUrl) ->
+                var title = a.text().replace(Regex("\\s+"), " ").trim()
+                if (title.length < 10) {
+                    val slug = URI(absUrl).path.trimEnd('/').substringAfterLast('/')
+                        .replace(Regex("^\\d+-"), "")
+                        .replace("-", " ")
+                        .trim()
+                    title = if (slug.length > 8) slug.replaceFirstChar { it.uppercase() } else "Публикация на ${wp.name}"
+                }
+                val ts = System.currentTimeMillis() - (idx * 20 + 10) * 60_000L
                 NewsItem(
                     id = "web_${absUrl.hashCode()}",
                     title = title.take(95),
@@ -305,10 +302,7 @@ object NewsRepository {
                     timestamp = ts,
                     timeLabel = "На сайте"
                 )
-            )
-            if (list.size >= 5) break
-        }
-        return list
+            }
     }
 
     private fun fetchInstagram(ig: IgProfile): List<NewsItem> {
