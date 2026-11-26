@@ -51,7 +51,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -211,6 +210,7 @@ data class OfficeAgentProfile(
     val deskChairPos: Offset,
     val roomDoorPos: Offset,
     val corridorEntryPos: Offset,
+    val corridorLaneY: Float,
     val diningSeatPos: Offset,
     val loungeSeatPos: Offset
 )
@@ -1778,34 +1778,56 @@ private fun createSoloAgentTask(
     }
 }
 
-private fun advanceWalkStep(
-    current: Offset,
-    waypoints: List<Offset>,
-    maxStep: Float
-): Pair<Offset, Boolean> {
-    if (waypoints.isEmpty()) return current to false
-    var pos = current
-    var remaining = maxStep
-    var moved = false
+private fun buildCleanPath(
+    fromPos: Offset,
+    ag: OfficeAgentProfile,
+    destination: AgentLocationZone
+): List<Offset> {
+    val points = mutableListOf<Offset>()
+    val isCurrentlyInsideRoom = (ag.isTopRow && fromPos.y < 0.32f) || (!ag.isTopRow && fromPos.y > 0.68f)
 
-    for (wp in waypoints) {
-        val dx = wp.x - pos.x
-        val dy = wp.y - pos.y
-        val dist = hypot(dx, dy)
-        if (dist < 0.0025f) {
-            pos = wp
-            continue
+    // Если агент внутри своего кабинета — сначала строго через центр дверного проёма в коридор
+    if (isCurrentlyInsideRoom) {
+        points.add(ag.roomDoorPos)
+        points.add(ag.corridorEntryPos)
+    }
+
+    when (destination) {
+        AgentLocationZone.DESK -> {
+            // Идём по своей полосе коридора к входу в свой кабинет и строго через центр двери к креслу
+            points.add(Offset(fromPos.x, ag.corridorLaneY))
+            points.add(Offset(ag.corridorEntryPos.x, ag.corridorLaneY))
+            points.add(ag.corridorEntryPos)
+            points.add(ag.roomDoorPos)
+            points.add(ag.deskChairPos)
         }
-        moved = true
-        if (dist <= remaining) {
-            pos = wp
-            remaining -= dist
-        } else {
-            pos = Offset(pos.x + (dx / dist) * remaining, pos.y + (dy / dist) * remaining)
-            return pos to true
+        AgentLocationZone.DINING -> {
+            // Идём по своей полосе коридора в центральный проход (x = 0.50), затем к своему стулу в столовой
+            points.add(Offset(ag.corridorEntryPos.x, ag.corridorLaneY))
+            points.add(Offset(0.50f, ag.corridorLaneY))
+            points.add(Offset(0.50f, 0.50f))
+            points.add(Offset(ag.diningSeatPos.x, 0.50f))
+            points.add(ag.diningSeatPos)
+        }
+        AgentLocationZone.LOUNGE -> {
+            // Идём по своей полосе коридора в центральный проход (x = 0.50), затем к своему месту на диване у ТВ
+            points.add(Offset(ag.corridorEntryPos.x, ag.corridorLaneY))
+            points.add(Offset(0.50f, ag.corridorLaneY))
+            points.add(Offset(0.50f, 0.50f))
+            points.add(Offset(ag.loungeSeatPos.x, 0.50f))
+            points.add(ag.loungeSeatPos)
         }
     }
-    return pos to moved
+
+    // Убираем дублирующиеся или уже пройденные стартовые точки
+    val cleaned = mutableListOf<Offset>()
+    for (pt in points) {
+        val prev = cleaned.lastOrNull() ?: fromPos
+        if (hypot(pt.x - prev.x, pt.y - prev.y) > 0.004f) {
+            cleaned.add(pt)
+        }
+    }
+    return cleaned
 }
 
 @Composable
@@ -1817,44 +1839,50 @@ fun AiOfficeLiveDialog(
 ) {
     val primary = MaterialTheme.colorScheme.primary
 
-    // 6 индивидуальных кабинетов (3 сверху, 3 снизу), посередине коридоры, столовая слева и комната отдыха справа
+    // 6 индивидуальных кабинетов + персональные полосы в коридоре (corridorLaneY), чтобы агенты не сталкивались
     val agents = remember {
         listOf(
             OfficeAgentProfile(
                 id = 0, name = "Алиса", role = "СМИ и RSS", roomTitle = "Кабинет 1 • СМИ",
                 accentColor = Color(0xFF10B981), hairColor = Color(0xFF78350F), isTopRow = true,
-                deskChairPos = Offset(0.17f, 0.21f), roomDoorPos = Offset(0.17f, 0.30f), corridorEntryPos = Offset(0.17f, 0.36f),
-                diningSeatPos = Offset(0.12f, 0.56f), loungeSeatPos = Offset(0.66f, 0.59f)
+                deskChairPos = Offset(0.17f, 0.21f), roomDoorPos = Offset(0.17f, 0.32f), corridorEntryPos = Offset(0.17f, 0.365f),
+                corridorLaneY = 0.365f,
+                diningSeatPos = Offset(0.11f, 0.57f), loungeSeatPos = Offset(0.65f, 0.59f)
             ),
             OfficeAgentProfile(
                 id = 1, name = "Макс", role = "Telegram", roomTitle = "Кабинет 2 • TG",
                 accentColor = Color(0xFF38BDF8), hairColor = Color(0xFF1E293B), isTopRow = true,
-                deskChairPos = Offset(0.50f, 0.21f), roomDoorPos = Offset(0.50f, 0.30f), corridorEntryPos = Offset(0.50f, 0.36f),
-                diningSeatPos = Offset(0.24f, 0.56f), loungeSeatPos = Offset(0.76f, 0.59f)
+                deskChairPos = Offset(0.50f, 0.21f), roomDoorPos = Offset(0.50f, 0.32f), corridorEntryPos = Offset(0.50f, 0.365f),
+                corridorLaneY = 0.405f,
+                diningSeatPos = Offset(0.22f, 0.57f), loungeSeatPos = Offset(0.75f, 0.59f)
             ),
             OfficeAgentProfile(
                 id = 2, name = "Инста", role = "Instagram", roomTitle = "Кабинет 3 • IG",
                 accentColor = Color(0xFFF43F5E), hairColor = Color(0xFF9F1239), isTopRow = true,
-                deskChairPos = Offset(0.83f, 0.21f), roomDoorPos = Offset(0.83f, 0.30f), corridorEntryPos = Offset(0.83f, 0.36f),
-                diningSeatPos = Offset(0.35f, 0.56f), loungeSeatPos = Offset(0.86f, 0.59f)
+                deskChairPos = Offset(0.83f, 0.21f), roomDoorPos = Offset(0.83f, 0.32f), corridorEntryPos = Offset(0.83f, 0.365f),
+                corridorLaneY = 0.445f,
+                diningSeatPos = Offset(0.33f, 0.57f), loungeSeatPos = Offset(0.85f, 0.59f)
             ),
             OfficeAgentProfile(
                 id = 3, name = "Авто-ИИ", role = "Электроавто", roomTitle = "Кабинет 4 • Авто",
                 accentColor = Color(0xFF22D3EE), hairColor = Color(0xFF0F172A), isTopRow = false,
-                deskChairPos = Offset(0.17f, 0.79f), roomDoorPos = Offset(0.17f, 0.70f), corridorEntryPos = Offset(0.17f, 0.64f),
-                diningSeatPos = Offset(0.12f, 0.56f), loungeSeatPos = Offset(0.66f, 0.59f)
+                deskChairPos = Offset(0.17f, 0.79f), roomDoorPos = Offset(0.17f, 0.68f), corridorEntryPos = Offset(0.17f, 0.635f),
+                corridorLaneY = 0.635f,
+                diningSeatPos = Offset(0.14f, 0.57f), loungeSeatPos = Offset(0.68f, 0.59f)
             ),
             OfficeAgentProfile(
                 id = 4, name = "Дом-Бот", role = "ТВ и Дом", roomTitle = "Кабинет 5 • ТВ/Дом",
                 accentColor = Color(0xFFF59E0B), hairColor = Color(0xFF451A03), isTopRow = false,
-                deskChairPos = Offset(0.50f, 0.79f), roomDoorPos = Offset(0.50f, 0.70f), corridorEntryPos = Offset(0.50f, 0.64f),
-                diningSeatPos = Offset(0.24f, 0.56f), loungeSeatPos = Offset(0.76f, 0.59f)
+                deskChairPos = Offset(0.50f, 0.79f), roomDoorPos = Offset(0.50f, 0.68f), corridorEntryPos = Offset(0.50f, 0.635f),
+                corridorLaneY = 0.595f,
+                diningSeatPos = Offset(0.25f, 0.57f), loungeSeatPos = Offset(0.78f, 0.59f)
             ),
             OfficeAgentProfile(
                 id = 5, name = "Нова", role = "Ноутбуки/ПК", roomTitle = "Кабинет 6 • ПК",
                 accentColor = Color(0xFFA78BFA), hairColor = Color(0xFF312E81), isTopRow = false,
-                deskChairPos = Offset(0.83f, 0.79f), roomDoorPos = Offset(0.83f, 0.70f), corridorEntryPos = Offset(0.83f, 0.64f),
-                diningSeatPos = Offset(0.35f, 0.56f), loungeSeatPos = Offset(0.86f, 0.59f)
+                deskChairPos = Offset(0.83f, 0.79f), roomDoorPos = Offset(0.83f, 0.68f), corridorEntryPos = Offset(0.83f, 0.635f),
+                corridorLaneY = 0.555f,
+                diningSeatPos = Offset(0.36f, 0.57f), loungeSeatPos = Offset(0.88f, 0.59f)
             )
         )
     }
@@ -1887,7 +1915,7 @@ fun AiOfficeLiveDialog(
                         currentTask = activeTask,
                         progress = 0.18f + (idx * 0.11f),
                         targetZone = startZone,
-                        breakTicksRemaining = if (startZone != AgentLocationZone.DESK) 14 else 0,
+                        breakTicksRemaining = if (startZone != AgentLocationZone.DESK) 40 else 0,
                         completedHistory = listOf(pastTask)
                     )
                 )
@@ -1911,88 +1939,55 @@ fun AiOfficeLiveDialog(
         }
     }
 
+    // Персональная очередь маршрутных точек для каждого агента — пройденные точки удаляются!
+    val agentPathQueues = remember {
+        mutableStateMapOf<Int, List<Offset>>().apply {
+            agents.forEach { put(it.id, emptyList()) }
+        }
+    }
+
     val agentWalkingFlags = remember {
         mutableStateMapOf<Int, Boolean>().apply {
             agents.forEach { put(it.id, false) }
         }
     }
 
-    // Размеренный цикл: задачи выполняются спокойно (15-20 сек), люди плавно идут ножками по коридорам
     LaunchedEffect(isScanning, newsList.size) {
         while (true) {
-            delay(80L)
+            delay(75L)
             val progressStep = if (isScanning) 0.0085f else 0.0042f
 
             for (ag in agents) {
                 val status = agentStatuses[ag.id] ?: continue
                 val curPos = agentPositions[ag.id] ?: ag.deskChairPos
+                val queue = agentPathQueues[ag.id].orEmpty()
 
-                // Маршрут по коридорам через дверной проём (чтобы агенты не ходили сквозь стены)
-                val waypoints = when (status.targetZone) {
-                    AgentLocationZone.DESK -> listOf(
-                        Offset(0.50f, curPos.y),
-                        Offset(0.50f, ag.corridorEntryPos.y),
-                        ag.corridorEntryPos,
-                        ag.roomDoorPos,
-                        ag.deskChairPos
-                    )
-                    AgentLocationZone.DINING -> listOf(
-                        ag.roomDoorPos,
-                        ag.corridorEntryPos,
-                        Offset(0.50f, ag.corridorEntryPos.y),
-                        Offset(0.50f, 0.50f),
-                        Offset(ag.diningSeatPos.x, 0.50f),
-                        ag.diningSeatPos
-                    )
-                    AgentLocationZone.LOUNGE -> listOf(
-                        ag.roomDoorPos,
-                        ag.corridorEntryPos,
-                        Offset(0.50f, ag.corridorEntryPos.y),
-                        Offset(0.50f, 0.50f),
-                        Offset(ag.loungeSeatPos.x, 0.50f),
-                        ag.loungeSeatPos
-                    )
+                // Если есть точки в маршруте — шагаем строго по ним, удаляя пройденные
+                if (queue.isNotEmpty()) {
+                    val targetWp = queue.first()
+                    val dx = targetWp.x - curPos.x
+                    val dy = targetWp.y - curPos.y
+                    val dist = hypot(dx, dy)
+                    val stepSize = 0.014f
+
+                    if (dist <= stepSize) {
+                        agentPositions[ag.id] = targetWp
+                        val remaining = queue.drop(1)
+                        agentPathQueues[ag.id] = remaining
+                        agentWalkingFlags[ag.id] = remaining.isNotEmpty()
+                    } else {
+                        agentPositions[ag.id] = Offset(
+                            curPos.x + (dx / dist) * stepSize,
+                            curPos.y + (dy / dist) * stepSize
+                        )
+                        agentWalkingFlags[ag.id] = true
+                    }
+                    continue
                 }
 
-                // Выбираем только оставшиеся точки маршрута впереди
-                val filteredWaypoints = when (status.targetZone) {
-                    AgentLocationZone.DESK -> {
-                        if (abs(curPos.x - ag.deskChairPos.x) < 0.02f &&
-                            ((ag.isTopRow && curPos.y <= ag.corridorEntryPos.y + 0.01f) ||
-                                (!ag.isTopRow && curPos.y >= ag.corridorEntryPos.y - 0.01f))
-                        ) {
-                            listOf(ag.roomDoorPos, ag.deskChairPos)
-                        } else {
-                            waypoints
-                        }
-                    }
-                    else -> {
-                        if ((ag.isTopRow && curPos.y >= 0.35f) || (!ag.isTopRow && curPos.y <= 0.65f)) {
-                            listOf(
-                                Offset(0.50f, 0.50f),
-                                Offset(
-                                    if (status.targetZone == AgentLocationZone.DINING) ag.diningSeatPos.x else ag.loungeSeatPos.x,
-                                    0.50f
-                                ),
-                                if (status.targetZone == AgentLocationZone.DINING) ag.diningSeatPos else ag.loungeSeatPos
-                            )
-                        } else {
-                            waypoints
-                        }
-                    }
-                }
+                agentWalkingFlags[ag.id] = false
 
-                val (nextPos, isWalkingNow) = advanceWalkStep(
-                    current = curPos,
-                    waypoints = filteredWaypoints,
-                    maxStep = 0.014f
-                )
-                agentPositions[ag.id] = nextPos
-                agentWalkingFlags[ag.id] = isWalkingNow
-
-                // Пока агент идёт ножками по коридору, ждём, пока он дойдёт до места
-                if (isWalkingNow) continue
-
+                // Агент дошёл до места и выполняет действие (отдыхает или работает за монитором)
                 if (status.targetZone != AgentLocationZone.DESK) {
                     if (status.breakTicksRemaining > 1) {
                         agentStatuses[ag.id] = status.copy(breakTicksRemaining = status.breakTicksRemaining - 1)
@@ -2009,6 +2004,8 @@ fun AiOfficeLiveDialog(
                             targetZone = AgentLocationZone.DESK,
                             breakTicksRemaining = 0
                         )
+                        // Строим маршрут от столовой/лаунжа обратно в свой кабинет через дверь
+                        agentPathQueues[ag.id] = buildCleanPath(curPos, ag, AgentLocationZone.DESK)
                     }
                 } else {
                     val nextProg = status.progress + progressStep
@@ -2028,6 +2025,8 @@ fun AiOfficeLiveDialog(
                                 breakTicksRemaining = 110,
                                 completedHistory = (listOf(finishedTask) + status.completedHistory).take(6)
                             )
+                            // Строим маршрут из кабинета через дверь в столовую или комнату отдыха
+                            agentPathQueues[ag.id] = buildCleanPath(curPos, ag, chosenZone)
                         } else {
                             ticketCounter += 1
                             val nextTask = createSoloAgentTask(
@@ -2139,7 +2138,6 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Большая детализированная карта ИИ-офиса с комнатами, коридорами и мониторами
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2167,10 +2165,8 @@ fun AiOfficeLiveDialog(
                         val w = size.width
                         val h = size.height
 
-                        // 1. Пол кабинетов (тёплый паркет/ламинат) и пол коридоров (плитка)
                         drawRect(color = Color(0xFF1E2433), size = size)
 
-                        // Горизонтальный главный коридор (y: 0.32..0.68) и центральный вертикальный проход (x: 0.44..0.56)
                         val hallTop = h * 0.32f
                         val hallBottom = h * 0.68f
                         drawRect(
@@ -2179,7 +2175,6 @@ fun AiOfficeLiveDialog(
                             size = Size(w, hallBottom - hallTop)
                         )
 
-                        // Плитка в коридорах
                         val tileStep = 18.dp.toPx()
                         var gx = tileStep
                         while (gx < w) {
@@ -2192,7 +2187,6 @@ fun AiOfficeLiveDialog(
                             gy += tileStep
                         }
 
-                        // Направляющая линия посередине коридора
                         drawLine(
                             color = Color(0xFF38BDF8).copy(alpha = 0.16f),
                             start = Offset(w * 0.06f, h * 0.50f),
@@ -2201,7 +2195,6 @@ fun AiOfficeLiveDialog(
                             pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f), 0f)
                         )
 
-                        // 2. Стены и 6 кабинетов с дверными проёмами
                         val wallColor = Color(0xFF475569)
                         val wallThickness = 3.dp.toPx()
                         val colWidth = w / 3f
@@ -2210,53 +2203,46 @@ fun AiOfficeLiveDialog(
                             val left = col * colWidth
                             val right = (col + 1) * colWidth
                             val doorCenter = left + colWidth / 2f
-                            val doorHalf = 18.dp.toPx()
+                            val doorHalf = 19.dp.toPx()
 
                             val topAgent = agents[col]
                             val isTopSel = topAgent.id == selectedAgentId
-                            // Подсветка пола выбранного верхнего кабинета
                             drawRect(
                                 color = topAgent.accentColor.copy(alpha = if (isTopSel) 0.13f else 0.04f),
                                 topLeft = Offset(left + 2.dp.toPx(), 2.dp.toPx()),
                                 size = Size(colWidth - 4.dp.toPx(), hallTop - 4.dp.toPx())
                             )
-                            // Окно на верхней стене кабинета
                             drawRect(
                                 color = Color(0xFF38BDF8).copy(alpha = 0.45f),
                                 topLeft = Offset(left + colWidth * 0.25f, 1.dp.toPx()),
                                 size = Size(colWidth * 0.50f, 3.5.dp.toPx())
                             )
-                            // Перегородка и стена с дверным проёмом сверху
                             drawLine(wallColor, Offset(right, 0f), Offset(right, hallTop), wallThickness)
                             drawLine(wallColor, Offset(left, hallTop), Offset(doorCenter - doorHalf, hallTop), wallThickness)
                             drawLine(wallColor, Offset(doorCenter + doorHalf, hallTop), Offset(right, hallTop), wallThickness)
-                            // Порог двери
                             drawLine(topAgent.accentColor.copy(alpha = 0.45f), Offset(doorCenter - doorHalf, hallTop), Offset(doorCenter + doorHalf, hallTop), 1.5.dp.toPx())
 
                             val botAgent = agents[col + 3]
                             val isBotSel = botAgent.id == selectedAgentId
-                            // Подсветка пола нижнего кабинета
                             drawRect(
                                 color = botAgent.accentColor.copy(alpha = if (isBotSel) 0.13f else 0.04f),
                                 topLeft = Offset(left + 2.dp.toPx(), hallBottom + 2.dp.toPx()),
                                 size = Size(colWidth - 4.dp.toPx(), h - hallBottom - 4.dp.toPx())
                             )
-                            // Окно на нижней стене
                             drawRect(
                                 color = Color(0xFF38BDF8).copy(alpha = 0.45f),
                                 topLeft = Offset(left + colWidth * 0.25f, h - 4.5.dp.toPx()),
                                 size = Size(colWidth * 0.50f, 3.5.dp.toPx())
                             )
-                            // Перегородка и стена с дверным проёмом снизу
                             drawLine(wallColor, Offset(right, hallBottom), Offset(right, h), wallThickness)
                             drawLine(wallColor, Offset(left, hallBottom), Offset(doorCenter - doorHalf, hallBottom), wallThickness)
                             drawLine(wallColor, Offset(doorCenter + doorHalf, hallBottom), Offset(right, hallBottom), wallThickness)
                             drawLine(botAgent.accentColor.copy(alpha = 0.45f), Offset(doorCenter - doorHalf, hallBottom), Offset(doorCenter + doorHalf, hallBottom), 1.5.dp.toPx())
                         }
 
-                        // 3. Зона столовой слева в центральном холле (x: 0.03..0.42, y: 0.39..0.63)
-                        val diningRect = Offset(w * 0.03f, h * 0.39f)
-                        val diningSize = Size(w * 0.39f, h * 0.24f)
+                        // Зона столовой слева (x: 0.03..0.42, y: 0.43..0.64) — проход сверху свободен
+                        val diningRect = Offset(w * 0.03f, h * 0.43f)
+                        val diningSize = Size(w * 0.39f, h * 0.21f)
                         drawRoundRect(
                             color = Color(0xFF451A03).copy(alpha = 0.38f),
                             topLeft = diningRect,
@@ -2270,7 +2256,6 @@ fun AiOfficeLiveDialog(
                             cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx()),
                             style = Stroke(width = 1.dp.toPx())
                         )
-                        // Кухонная стойка с кофемашиной слева
                         drawRoundRect(
                             color = Color(0xFF1E293B),
                             topLeft = Offset(diningRect.x + 5.dp.toPx(), diningRect.y + 8.dp.toPx()),
@@ -2280,11 +2265,10 @@ fun AiOfficeLiveDialog(
                         drawCircle(Color(0xFFEF4444), 2.5.dp.toPx(), Offset(diningRect.x + 11.dp.toPx(), diningRect.y + 18.dp.toPx()))
                         drawCircle(Color(0xFF10B981), 2.5.dp.toPx(), Offset(diningRect.x + 11.dp.toPx(), diningRect.y + 28.dp.toPx()))
 
-                        // Обеденный стол и тарелки
-                        val dTableX = diningRect.x + 26.dp.toPx()
-                        val dTableY = diningRect.y + diningSize.height * 0.28f
-                        val dTableW = diningSize.width - 36.dp.toPx()
-                        val dTableH = 18.dp.toPx()
+                        val dTableX = diningRect.x + 24.dp.toPx()
+                        val dTableY = diningRect.y + diningSize.height * 0.24f
+                        val dTableW = diningSize.width - 32.dp.toPx()
+                        val dTableH = 16.dp.toPx()
                         drawRoundRect(
                             color = Color(0xFF92400E),
                             topLeft = Offset(dTableX, dTableY),
@@ -2295,9 +2279,9 @@ fun AiOfficeLiveDialog(
                         drawCircle(Color.White.copy(alpha = 0.85f), 2.8.dp.toPx(), Offset(dTableX + dTableW * 0.52f, dTableY + dTableH * 0.5f))
                         drawCircle(Color.White.copy(alpha = 0.85f), 2.8.dp.toPx(), Offset(dTableX + dTableW * 0.82f, dTableY + dTableH * 0.5f))
 
-                        // 4. Комната отдыха справа в центральном холле (x: 0.58..0.97, y: 0.39..0.63)
-                        val loungeRect = Offset(w * 0.58f, h * 0.39f)
-                        val loungeSize = Size(w * 0.39f, h * 0.24f)
+                        // Комната отдыха справа (x: 0.58..0.97, y: 0.43..0.64) — проход сверху свободен
+                        val loungeRect = Offset(w * 0.58f, h * 0.43f)
+                        val loungeSize = Size(w * 0.39f, h * 0.21f)
                         drawRoundRect(
                             color = Color(0xFF1E1B4B).copy(alpha = 0.42f),
                             topLeft = loungeRect,
@@ -2311,37 +2295,34 @@ fun AiOfficeLiveDialog(
                             cornerRadius = CornerRadius(10.dp.toPx(), 10.dp.toPx()),
                             style = Stroke(width = 1.dp.toPx())
                         )
-                        // Широкий телевизор на стенке комнаты отдыха с живой картинкой
                         val tvLeft = loungeRect.x + loungeSize.width * 0.18f
                         val tvWidth = loungeSize.width * 0.64f
                         val tvTop = loungeRect.y + 6.dp.toPx()
                         drawRoundRect(
                             color = Color(0xFF090D16),
                             topLeft = Offset(tvLeft, tvTop),
-                            size = Size(tvWidth, 8.dp.toPx()),
+                            size = Size(tvWidth, 7.dp.toPx()),
                             cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
                         )
                         drawLine(
                             color = Color(0xFF38BDF8),
-                            start = Offset(tvLeft + 3.dp.toPx(), tvTop + 8.dp.toPx()),
-                            end = Offset(tvLeft + tvWidth - 3.dp.toPx(), tvTop + 8.dp.toPx()),
+                            start = Offset(tvLeft + 3.dp.toPx(), tvTop + 7.dp.toPx()),
+                            end = Offset(tvLeft + tvWidth - 3.dp.toPx(), tvTop + 7.dp.toPx()),
                             strokeWidth = 2.5.dp.toPx()
                         )
-                        // Журнальный столик и мягкий диван
                         drawRoundRect(
                             color = Color(0xFF334155),
-                            topLeft = Offset(loungeRect.x + loungeSize.width * 0.32f, loungeRect.y + loungeSize.height * 0.34f),
-                            size = Size(loungeSize.width * 0.36f, 9.dp.toPx()),
+                            topLeft = Offset(loungeRect.x + loungeSize.width * 0.32f, loungeRect.y + loungeSize.height * 0.32f),
+                            size = Size(loungeSize.width * 0.36f, 8.dp.toPx()),
                             cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
                         )
                         drawRoundRect(
                             color = Color(0xFF4338CA),
-                            topLeft = Offset(loungeRect.x + 12.dp.toPx(), loungeRect.y + loungeSize.height * 0.64f),
-                            size = Size(loungeSize.width - 24.dp.toPx(), 18.dp.toPx()),
+                            topLeft = Offset(loungeRect.x + 12.dp.toPx(), loungeRect.y + loungeSize.height * 0.62f),
+                            size = Size(loungeSize.width - 24.dp.toPx(), 17.dp.toPx()),
                             cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
                         )
 
-                        // 5. Детальные рабочие столы, системные блоки, растения и МОНИТОРЫ С ЖИВЫМ КОДОМ/ГРАФИКАМИ
                         agents.forEach { ag ->
                             val status = agentStatuses[ag.id]
                             val isAtDesk = status?.targetZone == AgentLocationZone.DESK && !(agentWalkingFlags[ag.id] ?: false)
@@ -2355,7 +2336,6 @@ fun AiOfficeLiveDialog(
                             )
                         }
 
-                        // 6. Детально прорисованные человечки (голова, причёска, торс, руки, шагающие ножки)
                         agents.forEach { ag ->
                             val pos = agentPositions[ag.id] ?: ag.deskChairPos
                             val isWalking = agentWalkingFlags[ag.id] ?: false
@@ -2376,7 +2356,6 @@ fun AiOfficeLiveDialog(
                         }
                     }
 
-                    // Подписи верхних кабинетов
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2392,7 +2371,6 @@ fun AiOfficeLiveDialog(
                         }
                     }
 
-                    // Подписи столовой и комнаты отдыха в центральном коридоре
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2405,18 +2383,17 @@ fun AiOfficeLiveDialog(
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFFCD34D),
-                            modifier = Modifier.padding(top = 42.dp)
+                            modifier = Modifier.padding(top = 56.dp)
                         )
                         Text(
                             "Комната отдыха • ТВ",
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFA5B4FC),
-                            modifier = Modifier.padding(top = 42.dp)
+                            modifier = Modifier.padding(top = 56.dp)
                         )
                     }
 
-                    // Подписи нижних кабинетов
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2433,7 +2410,6 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Селектор 6 сотрудников
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     agents.chunked(3).forEach { rowAgents ->
                         Row(
@@ -2487,7 +2463,6 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Карточка выбранного сотрудника и его экрана монитора
                 if (inspectedStatus != null) {
                     val isWalking = agentWalkingFlags[selectedAgentId] ?: false
                     Surface(
@@ -2617,13 +2592,11 @@ private fun DrawScope.drawDetailedWorkstation(
     progress: Float,
     scanPhase: Float
 ) {
-    // Для верхнего ряда стол стоит выше кресла (dir = -1), для нижнего — ниже кресла (dir = +1)
     val dir = if (isTopRow) -1f else 1f
     val deskW = 58.dp.toPx()
     val deskH = 22.dp.toPx()
     val deskCenterY = chairAnchor.y + dir * 18.dp.toPx()
 
-    // Офисное кресло на колёсиках
     drawCircle(
         color = Color(0xFF334155),
         radius = 8.5.dp.toPx(),
@@ -2636,14 +2609,12 @@ private fun DrawScope.drawDetailedWorkstation(
         cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
     )
 
-    // Комнатное растение в горшке в углу кабинета
     val plantX = chairAnchor.x + 33.dp.toPx()
     val plantY = deskCenterY + dir * 2.dp.toPx()
     drawCircle(Color(0xFF78350F), 4.5.dp.toPx(), Offset(plantX, plantY))
     drawCircle(Color(0xFF059669), 5.5.dp.toPx(), Offset(plantX - 1.5.dp.toPx(), plantY - 1.5.dp.toPx()))
     drawCircle(Color(0xFF10B981), 4.dp.toPx(), Offset(plantX + 2.dp.toPx(), plantY + 1.dp.toPx()))
 
-    // Столешница
     val deskTopLeft = Offset(chairAnchor.x - deskW / 2f, deskCenterY - deskH / 2f)
     drawRoundRect(
         color = Color(0xFF273142),
@@ -2659,7 +2630,6 @@ private fun DrawScope.drawDetailedWorkstation(
         style = Stroke(width = 1.dp.toPx())
     )
 
-    // Системный блок справа на столе
     drawRoundRect(
         color = Color(0xFF0F172A),
         topLeft = Offset(chairAnchor.x + deskW / 2f - 10.dp.toPx(), deskCenterY - 7.dp.toPx()),
@@ -2672,7 +2642,6 @@ private fun DrawScope.drawDetailedWorkstation(
         center = Offset(chairAnchor.x + deskW / 2f - 6.5.dp.toPx(), deskCenterY - 3.dp.toPx())
     )
 
-    // Клавиатура и мышка ближе к человеку
     val kbY = deskCenterY - dir * 5.5.dp.toPx()
     drawRoundRect(
         color = Color(0xFF0F172A),
@@ -2687,13 +2656,11 @@ private fun DrawScope.drawDetailedWorkstation(
         cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
     )
 
-    // Большой монитор с видимым экраном (на нём видны бегущие строки кода, графики и прогресс!)
     val monW = 30.dp.toPx()
     val monH = 11.dp.toPx()
     val monCenterY = deskCenterY + dir * 4.5.dp.toPx()
     val monTopLeft = Offset(chairAnchor.x - monW / 2f - 2.dp.toPx(), monCenterY - monH / 2f)
 
-    // Корпус монитора
     drawRoundRect(
         color = Color(0xFF090D16),
         topLeft = monTopLeft,
@@ -2708,7 +2675,6 @@ private fun DrawScope.drawDetailedWorkstation(
         style = Stroke(width = 1.dp.toPx())
     )
 
-    // Внутренний дисплей с живым контентом
     val scrLeft = monTopLeft.x + 2.dp.toPx()
     val scrTop = monTopLeft.y + 2.dp.toPx()
     val scrW = monW - 4.dp.toPx()
@@ -2720,7 +2686,6 @@ private fun DrawScope.drawDetailedWorkstation(
     )
 
     if (isActiveWork) {
-        // Строки текста/кода слева на экране монитора
         val line1W = scrW * (0.35f + 0.25f * sin(scanPhase * 6.28f).let { abs(it) })
         val line2W = scrW * (0.28f + 0.30f * cos(scanPhase * 6.28f).let { abs(it) })
         drawLine(
@@ -2737,7 +2702,6 @@ private fun DrawScope.drawDetailedWorkstation(
             strokeWidth = 1.3.dp.toPx(),
             cap = StrokeCap.Round
         )
-        // Полоска прогресса задачи внизу экрана монитора
         drawLine(
             color = Color(0xFF34D399),
             start = Offset(scrLeft + 1.5.dp.toPx(), scrTop + scrH - 1.2.dp.toPx()),
@@ -2746,7 +2710,6 @@ private fun DrawScope.drawDetailedWorkstation(
             cap = StrokeCap.Round
         )
     } else {
-        // Заставка ожидания, когда сотрудник ушёл на обед или в комнату отдыха
         drawCircle(
             color = Color(0xFFF59E0B).copy(alpha = 0.75f),
             radius = 1.6.dp.toPx(),
@@ -2766,7 +2729,6 @@ private fun DrawScope.drawDetailedHumanAgent(
     typePhase: Float,
     isSelected: Boolean
 ) {
-    // Выделение выбранного сотрудника
     if (isSelected) {
         drawCircle(
             color = shirtColor.copy(alpha = 0.24f),
@@ -2785,12 +2747,10 @@ private fun DrawScope.drawDetailedHumanAgent(
     val pantsColor = Color(0xFF1E293B)
     val shoeColor = Color(0xFF090D16)
 
-    // 1. НОЖКИ И БОТИНКИ (шагают при ходьбе по коридору, либо аккуратно стоят/сидят)
     if (isWalking) {
         val leftStep = walkPhase * 4.5.dp.toPx()
         val rightStep = -walkPhase * 4.5.dp.toPx()
 
-        // Левая нога
         drawLine(
             color = pantsColor,
             start = Offset(center.x - 3.dp.toPx(), center.y + 4.dp.toPx()),
@@ -2800,7 +2760,6 @@ private fun DrawScope.drawDetailedHumanAgent(
         )
         drawCircle(shoeColor, 2.dp.toPx(), Offset(center.x - 3.5.dp.toPx(), center.y + 11.5.dp.toPx() + leftStep))
 
-        // Правая нога
         drawLine(
             color = pantsColor,
             start = Offset(center.x + 3.dp.toPx(), center.y + 4.dp.toPx()),
@@ -2810,7 +2769,6 @@ private fun DrawScope.drawDetailedHumanAgent(
         )
         drawCircle(shoeColor, 2.dp.toPx(), Offset(center.x + 3.5.dp.toPx(), center.y + 11.5.dp.toPx() + rightStep))
     } else if (zone == AgentLocationZone.LOUNGE) {
-        // Сидит на диване в комнате отдыха (коленки вытянуты вперёд)
         drawLine(
             color = pantsColor,
             start = Offset(center.x - 3.5.dp.toPx(), center.y + 3.dp.toPx()),
@@ -2826,7 +2784,6 @@ private fun DrawScope.drawDetailedHumanAgent(
             cap = StrokeCap.Round
         )
     } else if (zone == AgentLocationZone.DINING) {
-        // Стоит/сидит у обеденного стола
         drawLine(
             color = pantsColor,
             start = Offset(center.x - 3.dp.toPx(), center.y + 4.dp.toPx()),
@@ -2843,7 +2800,6 @@ private fun DrawScope.drawDetailedHumanAgent(
         )
     }
 
-    // 2. ТОРС И ПЛЕЧИ В РУБАШКЕ
     drawRoundRect(
         color = shirtColor,
         topLeft = Offset(center.x - 7.5.dp.toPx(), center.y - 4.5.dp.toPx()),
@@ -2851,7 +2807,6 @@ private fun DrawScope.drawDetailedHumanAgent(
         cornerRadius = CornerRadius(4.5.dp.toPx(), 4.5.dp.toPx())
     )
 
-    // 3. РУКИ (печатают по клавиатуре / машут при ходьбе / держат кружку кофе в столовой)
     if (zone == AgentLocationZone.DESK && !isWalking) {
         val dir = if (isTopRow) -1f else 1f
         val kbReachY = center.y + dir * 12.5.dp.toPx()
@@ -2887,7 +2842,6 @@ private fun DrawScope.drawDetailedHumanAgent(
             cap = StrokeCap.Round
         )
     } else if (zone == AgentLocationZone.DINING) {
-        // Держит кружку кофе в столовой
         drawLine(
             color = skinColor,
             start = Offset(center.x + 6.dp.toPx(), center.y),
@@ -2898,14 +2852,12 @@ private fun DrawScope.drawDetailedHumanAgent(
         drawCircle(Color(0xFFFBBF24), 2.4.dp.toPx(), Offset(center.x + 10.dp.toPx(), center.y - 3.5.dp.toPx()))
     }
 
-    // 4. ГОЛОВА, ПРИЧЁСКА И ГЛАЗА (повернуты к монитору или к телевизору)
     val headCenter = Offset(center.x, center.y - 7.dp.toPx())
     drawCircle(
         color = skinColor,
         radius = 5.2.dp.toPx(),
         center = headCenter
     )
-    // Причёска сверху головы
     drawArc(
         color = hairColor,
         startAngle = 180f,
@@ -2914,7 +2866,6 @@ private fun DrawScope.drawDetailedHumanAgent(
         topLeft = Offset(headCenter.x - 5.2.dp.toPx(), headCenter.y - 5.2.dp.toPx()),
         size = Size(10.4.dp.toPx(), 10.4.dp.toPx())
     )
-    // Глазки, когда сотрудник смотрит на нас (нижний ряд за столом или в холле)
     val lookingBack = zone == AgentLocationZone.DESK && isTopRow && !isWalking
     if (!lookingBack) {
         drawCircle(Color(0xFF0F172A), 0.9.dp.toPx(), Offset(headCenter.x - 1.8.dp.toPx(), headCenter.y + 0.5.dp.toPx()))
