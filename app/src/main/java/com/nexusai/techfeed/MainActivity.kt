@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Hub
@@ -138,7 +139,8 @@ data class TechReviewArticle(
     val cons: List<String>,
     val score: String,
     val publishedAt: String,
-    val accentHex: Long
+    val accentHex: Long,
+    val deputyEditedNote: String = ""
 )
 
 data class ChiefAuditEntry(
@@ -151,6 +153,14 @@ data class ChiefAuditEntry(
     val hasReprimand: Boolean,
     val isApproved: Boolean,
     val checkedAt: String
+)
+
+data class DeputyEditEntry(
+    val id: String,
+    val deviceName: String,
+    val fixedField: String,
+    val correctionDetail: String,
+    val editedAt: String
 )
 
 data class ThemePalette(
@@ -332,7 +342,7 @@ object ReviewCatalogFactory {
             approvedByChief = "ТТХ проверены Авророй",
             headline = "Huawei Watch Fit 5: тонкий корпус, яркий AMOLED и до 10 дней без розетки",
             leadSummary = "Детальный текстовый обзор актуальных умных часов Huawei: проверяем экран 60 Гц, датчики пульса и SpO2, работу с HarmonyOS и автономность.",
-            fullBody = "Huawei Watch Fit 5 сохранили лёгкий прямоугольный форм-фактор, который практически не ощущается на запястье даже во время сна. Увеличенный AMOLED-дисплей с тонкими рамками легко читается под прямым солнцем.\n\nВнутри обновлена оптическая платформа мониторинга пульса и уровня кислорода в крови (SpO2): точность замеров на пробежках выросла, а графики сна и восстановления в приложении Huawei Health стали подробнее. Поддерживаются звонки по Bluetooth и более 100 спортивных режимов с GPS.",
+            fullBody = "Huawei Watch Fit 5 сохранили лёгкий прямоугольный форм-фактор, который практически не ощущается на запястье даже во время сна. Увеличенный AMOLED-дисплей с тонкими рамками легко читается под прямым солнцем.\n\nВнутри обновлена оптическая платформа мониторинга пульса и уровня кислорода в крови (SpO2): точность замеров на пробежках выросла, а графики сна и восстановления в приложении Huawei Health стали подробнее.",
             specs = listOf(
                 ReviewSpecRow("Экран", "1.82\" AMOLED, 480×408, 60 Гц"),
                 ReviewSpecRow("Корпус и защита", "Алюминиевый сплав, вес 27 г, влагозащита 5 ATM"),
@@ -444,8 +454,8 @@ object ReviewCatalogFactory {
         )
     )
 
-    // Строгий каталог уникальных устройств: каждое устройство выпускается ТОЛЬКО ОДИН РАЗ, без ревизий и дублей!
-    private val uniqueNewDevicesCatalog = listOf(
+    // Огромный пул уникальных устройств по всем брендам и типам техники (никаких лимитов в 12 статей!)
+    private val curatedDevicesPool = listOf(
         TechReviewArticle(
             id = "uniq_oneplus_15r",
             deviceName = "OnePlus 15R",
@@ -456,7 +466,7 @@ object ReviewCatalogFactory {
             approvedByChief = "ТТХ проверены Авророй",
             headline = "OnePlus 15R: чип Snapdragon 8 Gen 5, плоский экран 165 Гц и батарея 7400 мАч",
             leadSummary = "Обзор производительного смартфона OnePlus 15R (в Китае — Ace 6T): плоская AMOLED-панель 165 Гц, кремний-углеродный аккумулятор 7400 мАч и зарядка 80 Вт.",
-            fullBody = "OnePlus 15R делает ставку на максимальную плавность интерфейса и рекордную автономность. Смартфон оснащён 6.83-дюймовым плоским LTPS AMOLED-экраном с разрешением 1.5K и частотой обновления до 165 Гц.\n\nВнутри установлен процессор Qualcomm Snapdragon 8 Gen 5 с испарительной камерой площадью 9140 мм², а кремний-углеродный аккумулятор ёмкостью 7400 мАч обеспечивает до двух суток активной работы при поддержке проводной зарядки SuperVOOC 80 Вт.",
+            fullBody = "OnePlus 15R делает ставку на максимальную плавность интерфейса и рекордную автономность. Смартфон оснащён 6.83-дюймовым плоским LTPS AMOLED-экраном с разрешением 1.5K и частотой обновления до 165 Гц.\n\nВнутри установлен процессор Qualcomm Snapdragon 8 Gen 5 с испарительной камерой площадью 9140 мм², а кремний-углеродный аккумулятор ёмкостью 7400 мАч обеспечивает до двух суток активной работы.",
             specs = listOf(
                 ReviewSpecRow("Экран", "6.83\" плоский AMOLED 1.5K (2800×1272), 165 Гц"),
                 ReviewSpecRow("Процессор и память", "Qualcomm Snapdragon 8 Gen 5, LPDDR5X, UFS 4.1"),
@@ -480,7 +490,7 @@ object ReviewCatalogFactory {
             approvedByChief = "ТТХ проверены Авророй",
             headline = "OnePlus Nord Buds 4 Pro: кодек LHDC 5.0, шумоподавление 55 дБ и драйверы 12.4 мм",
             leadSummary = "Детальный тест доступных флагманских TWS от OnePlus: поддержка Hi-Res аудио LHDC 5.0, глубокий бас BassWave и 44 часа автономности.",
-            fullBody = "OnePlus Nord Buds 4 Pro получили крупные 12.4-мм титанизированные драйверы и редкую для своего класса поддержку Hi-Res кодека LHDC 5.0. Адаптивное шумоподавление анализирует форму ушного канала и отсекает до 55 дБ низкочастотного гула.\n\nБлагодаря алгоритму BassWave 2.0 наушники не заваливают середину даже на максимальном уровне баса, а трёхмикрофонная система чисто передаёт голос на ветру.",
+            fullBody = "OnePlus Nord Buds 4 Pro получили крупные 12.4-мм титанизированные драйверы и редкую для своего класса поддержку Hi-Res кодека LHDC 5.0. Адаптивное шумоподавление анализирует форму ушного канала и отсекает до 55 дБ низкочастотного гула.",
             specs = listOf(
                 ReviewSpecRow("Драйверы", "12.4 мм динамические с титановым напылением"),
                 ReviewSpecRow("Кодеки", "LHDC 5.0, AAC, SBC"),
@@ -504,7 +514,7 @@ object ReviewCatalogFactory {
             approvedByChief = "ТТХ проверены Авророй",
             headline = "Apple Watch Series 11: тонкий корпус, широкоугольный OLED и быстрая зарядка",
             leadSummary = "Подробный разбор новых умных часов Apple: насколько ярче стал экран под углом, как работает чип S11 и сколько держат батарею.",
-            fullBody = "Apple Watch Series 11 получили обновлённую широкоугольную OLED-матрицу LTPO3, которая остаётся на 40% ярче при взгляде под углом, а в режиме Always-On отображает секундную стрелку в реальном времени.\n\nТонкий корпус толщиной 9.7 мм стал ещё удобнее под манжетой рубашки, а быстрая зарядка набирает 80% ёмкости всего за 30 минут.",
+            fullBody = "Apple Watch Series 11 получили обновлённую широкоугольную OLED-матрицу LTPO3, которая остаётся на 40% ярче при взгляде под углом, а в режиме Always-On отображает секундную стрелку в реальном времени.",
             specs = listOf(
                 ReviewSpecRow("Дисплей", "LTPO3 OLED Always-On, до 2000 нит"),
                 ReviewSpecRow("Процессор", "Apple S11 SiP, 64 ГБ встроенной памяти"),
@@ -528,7 +538,7 @@ object ReviewCatalogFactory {
             approvedByChief = "ТТХ проверены Авророй",
             headline = "Xiaomi TV S Mini LED 75\": 512 зон локального затемнения, 144 Гц и яркость 1200 нит",
             leadSummary = "Тестируем 75-дюймовый Mini-LED телевизор Xiaomi: контрастность в тёмных сценах, работу 144 Гц с консолями и оболочку Google TV.",
-            fullBody = "Xiaomi TV S Mini LED 75 сочетает большую 75-дюймовую диагональ с матрицей на 512 зон локальной подсветки и пиковой яркостью 1200 нит. В ночных сценах фильмов ореолы вокруг ярких объектов сведены к минимуму.\n\nНаличие двух полноценных портов HDMI 2.1 с поддержкой 4K 144 Гц, VRR и FreeSync Premium делает телевизор отличным монитором для современных игровых приставок.",
+            fullBody = "Xiaomi TV S Mini LED 75 сочетает большую 75-дюймовую диагональ с матрицей на 512 зон локальной подсветки и пиковой яркостью 1200 нит. В ночных сценах фильмов ореолы вокруг ярких объектов сведены к минимуму.",
             specs = listOf(
                 ReviewSpecRow("Экран", "75\" VA Mini-LED 4K (3840×2160), 144 Гц, 512 зон"),
                 ReviewSpecRow("Яркость и HDR", "До 1200 нит, Dolby Vision IQ, HDR10+, IMAX Enhanced"),
@@ -552,7 +562,7 @@ object ReviewCatalogFactory {
             approvedByChief = "ТТХ проверены Авророй",
             headline = "Samsung Galaxy Watch Ultra: титановый корпус, 3000 нит и двухчастотный GPS",
             leadSummary = "Обзор защищённых флагманских часов Samsung для спорта и туризма: 3-нм процессор Exynos W1000 и сапфировое стекло.",
-            fullBody = "Galaxy Watch Ultra созданы для экстремальных нагрузок: корпус выполнен из титана Grade 4, экран прикрыт сапфировым стеклом, а влагозащита достигает 10 ATM.\n\nНовый 5-ядерный чип Exynos W1000 по техпроцессу 3 нм обеспечил мгновенный отклик One UI Watch.",
+            fullBody = "Galaxy Watch Ultra созданы для экстремальных нагрузок: корпус выполнен из титана Grade 4, экран прикрыт сапфировым стеклом, а влагозащита достигает 10 ATM.",
             specs = listOf(
                 ReviewSpecRow("Дисплей", "1.5\" Super AMOLED, 480×480, сапфир, 3000 нит"),
                 ReviewSpecRow("Чипсет и память", "Exynos W1000 (3 нм), 2 ГБ ОЗУ + 32 ГБ ПЗУ"),
@@ -576,7 +586,7 @@ object ReviewCatalogFactory {
             approvedByChief = "ТТХ проверены Авророй",
             headline = "HONOR MagicBook Art 14: съёмная магнитная веб-камера, вес 1.03 кг и OLED 3.1K",
             leadSummary = "Тестируем ультратонкий ноутбук HONOR с рекордно тонкими рамками 2.2 мм и спрятанной в корпусе камерой.",
-            fullBody = "HONOR MagicBook Art 14 выделяется уникальной съёмной веб-камерой на магнитах, которая хранится в боковом слоте корпуса и при необходимости крепится на верхнюю крышку.\n\nБлагодаря этому экран занимает 97% площади крышки, а частота ШИМ 4320 Гц полностью исключает усталость глаз.",
+            fullBody = "HONOR MagicBook Art 14 выделяется уникальной съёмной веб-камерой на магнитах, которая хранится в боковом слоте корпуса и при необходимости крепится на верхнюю крышку.",
             specs = listOf(
                 ReviewSpecRow("Экран", "14.6\" OLED 3120×2080, 120 Гц, ШИМ 4320 Гц"),
                 ReviewSpecRow("Процессор", "Intel Core Ultra 7 155H, графика Intel Arc"),
@@ -589,20 +599,464 @@ object ReviewCatalogFactory {
             score = "9.3 / 10",
             publishedAt = "Сегодня",
             accentHex = 0xFF06B6D4
+        ),
+        TechReviewArticle(
+            id = "uniq_samsung_galaxy_s26_ultra",
+            deviceName = "Samsung Galaxy S26 Ultra",
+            brand = "Samsung",
+            category = "phone",
+            categoryLabel = "Смартфоны",
+            authorAgent = "Вика • Обзоры смартфонов",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "Samsung Galaxy S26 Ultra: титановый корпус, Snapdragon 8 Elite Gen 2 и 200 МП камера",
+            leadSummary = "Обзор главного флагмана Samsung: антибликовое стекло Gorilla Armor 2, стилус S Pen и обновленный телеобъектив 50 МП.",
+            fullBody = "Samsung Galaxy S26 Ultra получил ещё более тонкие симметричные рамки, обновлённый процессор Snapdragon 8 Elite Gen 2 for Galaxy и улучшенную ночную съёмку на все четыре модуля камеры.",
+            specs = listOf(
+                ReviewSpecRow("Экран", "6.9\" Dynamic AMOLED 2X QHD+, 1–120 Гц, 2600 нит"),
+                ReviewSpecRow("Процессор", "Snapdragon 8 Elite Gen 2 for Galaxy (3 нм)"),
+                ReviewSpecRow("Камеры", "200 МП (OIS) + 50 МП 5x + 50 МП 3x + 50 МП ширик"),
+                ReviewSpecRow("Батарея", "5000 мАч, зарядка 45 Вт проводная / 25 Вт Qi2"),
+                ReviewSpecRow("Корпус", "Титан Grade 5, IP68, встроенный S Pen")
+            ),
+            pros = listOf("Лучшее антибликовое покрытие экрана", "Универсальный набор из четырёх камер высокого разрешения"),
+            cons = listOf("Скорость зарядки 45 Вт уступает китайским флагманам"),
+            score = "9.5 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFF3B82F6
+        ),
+        TechReviewArticle(
+            id = "uniq_nothing_phone_3",
+            deviceName = "Nothing Phone (3)",
+            brand = "Nothing",
+            category = "phone",
+            categoryLabel = "Смартфоны",
+            authorAgent = "Вика • Обзоры смартфонов",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "Nothing Phone (3): прозрачный дизайн с подсветкой Glyph, Snapdragon 8s Gen 4 и Nothing OS",
+            leadSummary = "Изучаем третье поколение прозрачного смартфона Карла Пея: новые сценарии светодиодов Glyph, плоский LTPO-экран и чистая система.",
+            fullBody = "Nothing Phone (3) сохранил фирменную прозрачную спинку, но получил более точечную матрицу светодиодов Glyph Matrix для отображения виджетов, таймеров и уведомлений без включения основного экрана.",
+            specs = listOf(
+                ReviewSpecRow("Экран", "6.67\" LTPO AMOLED 1.5K, 1–120 Гц, 3000 нит"),
+                ReviewSpecRow("Процессор", "Qualcomm Snapdragon 8s Gen 4 (4 нм)"),
+                ReviewSpecRow("Камеры", "50 МП Sony LYT-700 (OIS) + 50 МП перископ 3x + 50 МП ширик"),
+                ReviewSpecRow("Батарея", "5500 мАч, проводная зарядка 65 Вт, беспроводная 15 Вт"),
+                ReviewSpecRow("Система", "Nothing OS на базе Android с ИИ-ассистентом Essential Space")
+            ),
+            pros = listOf("Уникальный дизайн и удобные виджеты Glyph", "Быстрая и лёгкая оболочка Nothing OS без рекламы"),
+            cons = listOf("Не самый топовый флагманский чипсет в классе"),
+            score = "9.1 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFF94A3B8
+        ),
+        TechReviewArticle(
+            id = "uniq_google_pixel_10_pro",
+            deviceName = "Google Pixel 10 Pro",
+            brand = "Google",
+            category = "phone",
+            categoryLabel = "Смартфоны",
+            authorAgent = "Вика • Обзоры смартфонов",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "Google Pixel 10 Pro: 3-нм чип Tensor G5 от TSMC, экран Super Actua и 7 лет обновлений",
+            leadSummary = "Тестируем камерофон Google на новом процессоре Tensor G5, впервые произведённом на фабриках TSMC.",
+            fullBody = "Переход Tensor G5 на техпроцесс TSMC 3 нм заметно снизил нагрев под нагрузкой и улучшил автономность Google Pixel 10 Pro. Вычислительная фотография и видео в 4K HDR стали работать ещё быстрее.",
+            specs = listOf(
+                ReviewSpecRow("Экран", "6.3\" LTPO OLED Super Actua, 1–120 Гц, 3000 нит"),
+                ReviewSpecRow("Процессор", "Google Tensor G5 (TSMC 3 нм) + Titan M2"),
+                ReviewSpecRow("Камеры", "50 МП (OIS) + 48 МП 5x перископ + 48 МП ультраширик"),
+                ReviewSpecRow("Батарея", "4950 мАч, зарядка 37 Вт, Qi2 магнитная зарядка"),
+                ReviewSpecRow("Поддержка", "7 лет обновлений Android и Pixel Feature Drops")
+            ),
+            pros = listOf("Эталонная обработка фото и видео", "Компактный флагманский формат 6.3 дюйма"),
+            cons = listOf("Невысокая мощность зарядки по сравнению с конкурентами"),
+            score = "9.3 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFF10B981
+        ),
+        TechReviewArticle(
+            id = "uniq_vivo_x200_pro",
+            deviceName = "vivo X200 Pro",
+            brand = "vivo",
+            category = "phone",
+            categoryLabel = "Смартфоны",
+            authorAgent = "Вика • Обзоры смартфонов",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "vivo X200 Pro: перископ 200 МП ZEISS APO, Dimensity 9400 и батарея 6000 мАч",
+            leadSummary = "Обзор одного из лучших камерофонов на рынке: телевик 200 МП с оптикой ZEISS, чип обработки фото V3+ и кремний-углеродный аккумулятор.",
+            fullBody = "vivo X200 Pro оснащён 200-мегапиксельным перископическим модулем ZEISS APO с макрорежимом и выдающейся детализацией на фокусном расстоянии 85–135 мм.",
+            specs = listOf(
+                ReviewSpecRow("Экран", "6.78\" 8T LTPO AMOLED 1.5K, 1–120 Гц, 4500 нит"),
+                ReviewSpecRow("Процессор", "MediaTek Dimensity 9400 (3 нм) + чип vivo V3+"),
+                ReviewSpecRow("Камеры ZEISS", "50 МП Sony LYT-818 + 200 МП перископ + 50 МП ширик"),
+                ReviewSpecRow("Батарея", "6000 мАч BlueVolt, проводная 90 Вт / беспроводная 30 Вт"),
+                ReviewSpecRow("Защита", "IP68 / IP69, ультразвуковой сканер отпечатков")
+            ),
+            pros = listOf("Выдающийся 200 МП телевик ZEISS с телемакро", "Отличная автономность от батареи 6000 мАч"),
+            cons = listOf("Массивный блок камер на задней панели"),
+            score = "9.5 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFF38BDF8
+        ),
+        TechReviewArticle(
+            id = "uniq_zeekr_7x",
+            deviceName = "Zeekr 7X Performance",
+            brand = "Электроавто",
+            category = "car",
+            categoryLabel = "Электроавто",
+            authorAgent = "Авто-ИИ • Электроавто",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "Zeekr 7X Performance: семейный электрокроссовер 800 В с разгоном за 3.8 секунды",
+            leadSummary = "Разбираем характеристики электрокроссовера Zeekr 7X: батарея Golden Brick с зарядкой за 10.5 минут, пневмоподвеска и лидар.",
+            fullBody = "Zeekr 7X построен на 800-вольтовой платформе SEA и поддерживает сверхбыструю зарядку 5.5C, пополняя заряд с 10% до 80% всего за 10.5 минут на мощных станциях.",
+            specs = listOf(
+                ReviewSpecRow("Силовая установка", "Полный привод, 2 мотора, 646 л.с. (475 кВт)"),
+                ReviewSpecRow("Динамика", "Разгон 0–100 км/ч за 3.8 сек"),
+                ReviewSpecRow("Батарея и запас", "100 кВт·ч CATL Qilin, до 705 км (CLTC)"),
+                ReviewSpecRow("Зарядка", "Архитектура 800 В, быстрая зарядка до 480 кВт"),
+                ReviewSpecRow("Салон и подвеска", "Пневмоподвеска, экран 16\" Mini-LED, автопилот Zeekr AD")
+            ),
+            pros = listOf("Рекордная скорость зарядки на архитектуре 800 В", "Просторный салон и комфортная пневмоподвеска"),
+            cons = listOf("Отсутствие официальной гарантии в ряде стран"),
+            score = "9.4 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFF22D3EE
+        ),
+        TechReviewArticle(
+            id = "uniq_macbook_pro_14_m4",
+            deviceName = "Apple MacBook Pro 14 M4 Pro",
+            brand = "Apple",
+            category = "laptop",
+            categoryLabel = "Ноутбуки",
+            authorAgent = "Нова • Обзоры ноутбуков",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "Apple MacBook Pro 14 M4 Pro: порты Thunderbolt 5, нанотекстурный экран и 22 часа работы",
+            leadSummary = "Обзор обновлённого профессионального ноутбука Apple на чипе M4 Pro с 24 ГБ объединённой памяти в базе.",
+            fullBody = "MacBook Pro 14 на чипе M4 Pro получил три порта Thunderbolt 5 с пропускной способностью до 120 Гбит/с, яркость SDR до 1000 нит на улице и опциональное матовое нанотекстурное стекло.",
+            specs = listOf(
+                ReviewSpecRow("Экран", "14.2\" Liquid Retina XDR Mini-LED, 120 Гц, 1600 нит"),
+                ReviewSpecRow("Процессор", "Apple M4 Pro (14 ядер CPU, 20 ядер GPU)"),
+                ReviewSpecRow("Память", "24 ГБ объединённой памяти + 1 ТБ SSD"),
+                ReviewSpecRow("Порты", "3× Thunderbolt 5, HDMI 2.1, SDXC, MagSafe 3"),
+                ReviewSpecRow("Автономность", "До 22 часов воспроизведения видео")
+            ),
+            pros = listOf("Мощнейший чип M4 Pro и порты Thunderbolt 5", "Эталонная автономность до 22 часов"),
+            cons = listOf("Высокая цена конфигураций с большим объёмом SSD"),
+            score = "9.5 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFFA78BFA
+        ),
+        TechReviewArticle(
+            id = "uniq_huawei_freebuds_pro_4",
+            deviceName = "Huawei FreeBuds Pro 4",
+            brand = "Huawei",
+            category = "buds",
+            categoryLabel = "Наушники",
+            authorAgent = "Артур • Носимая электроника",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "Huawei FreeBuds Pro 4: передача звука без потерь 2.3 Мбит/с и чистая речь при шуме 100 дБ",
+            leadSummary = "Тестируем флагманские TWS-наушники Huawei на базе чипа Kirin A2 с кодеком L2HC 4.0 и пенными амбушюрами.",
+            fullBody = "Huawei FreeBuds Pro 4 используют двойные излучатели и кодек L2HC 4.0 для передачи аудио без потерь со скоростью до 2.3 Мбит/с в связке с актуальными смартфонами Huawei.",
+            specs = listOf(
+                ReviewSpecRow("Излучатели", "11 мм динамический + планарный твитер"),
+                ReviewSpecRow("Кодеки", "L2HC 4.0 (до 2.3 Мбит/с), LDAC, AAC, SBC"),
+                ReviewSpecRow("Шумоподавление", "Интеллектуальное ANC + датчик костной проводимости"),
+                ReviewSpecRow("Автономность", "До 7 ч без ANC, до 33 ч с зарядным кейсом"),
+                ReviewSpecRow("Защита", "IP54, управление кивками головы")
+            ),
+            pros = listOf("Лучшее шумоподавление микрофонов во время звонков", "Поддержка L2HC 4.0 и LDAC"),
+            cons = listOf("Максимальный битрейт 2.3 Мбит/с доступен только на смартфонах Huawei"),
+            score = "9.3 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFF10B981
+        ),
+        TechReviewArticle(
+            id = "uniq_lg_oled_g4_65",
+            deviceName = "LG OLED evo G4 65\"",
+            brand = "Умный дом и ТВ",
+            category = "tv",
+            categoryLabel = "Телевизоры",
+            authorAgent = "Дом-Бот • Обзоры ТВ и дома",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "LG OLED evo G4 65\": процессор Alpha 11 AI, микролинзы MLA и 144 Гц для игр",
+            leadSummary = "Обзор флагманского OLED-телевизора LG с настенным креплением без зазора и четырьмя портами HDMI 2.1.",
+            fullBody = "LG OLED G4 оснащён панелью с массивом микролинз второго поколения (MLA) и процессором Alpha 11 AI, обеспечивающим высокую пиковую яркость и идеальную совместимость с Dolby Vision и G-Sync.",
+            specs = listOf(
+                ReviewSpecRow("Матрица", "65\" WOLED MLA 4K (3840×2160), 144 Гц"),
+                ReviewSpecRow("Процессор и HDR", "Alpha 11 AI 4K, Dolby Vision, HDR10, HLG"),
+                ReviewSpecRow("Игровые функции", "4× HDMI 2.1 (48 Гбит/с), G-Sync, FreeSync, VRR 144 Гц"),
+                ReviewSpecRow("Звук", "60 Вт (4.2 канала), Dolby Atmos, AI Sound Pro"),
+                ReviewSpecRow("Система", "webOS 24 с 5-летней программой обновлений")
+            ),
+            pros = listOf("4 полноценных порта HDMI 2.1 на 48 Гбит/с", "Поддержка Dolby Vision и 144 Гц"),
+            cons = listOf("Настольная подставка приобретается отдельно (в комплекте настенный кронштейн)"),
+            score = "9.5 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFFF59E0B
+        ),
+        TechReviewArticle(
+            id = "uniq_oppo_find_x8_pro",
+            deviceName = "OPPO Find X8 Pro",
+            brand = "OPPO",
+            category = "phone",
+            categoryLabel = "Смартфоны",
+            authorAgent = "Вика • Обзоры смартфонов",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "OPPO Find X8 Pro: два перископических телевика Hasselblad и кнопка камеры Quick Button",
+            leadSummary = "Обзор флагмана OPPO с четырьмя камерами по 50 МП, процессором Dimensity 9400 и батареей 5910 мАч.",
+            fullBody = "OPPO Find X8 Pro выделяется сразу двумя перископическими телеобъективами (3x и 6x) с цветопередачей Hasselblad и сенсорной кнопкой быстрого запуска камеры на боковой грани.",
+            specs = listOf(
+                ReviewSpecRow("Экран", "6.78\" LTPO AMOLED 1.5K, 1–120 Гц, Dolby Vision"),
+                ReviewSpecRow("Процессор", "MediaTek Dimensity 9400 (3 нм)"),
+                ReviewSpecRow("Камеры Hasselblad", "4× 50 МП (основная + 3x перископ + 6x перископ + ширик)"),
+                ReviewSpecRow("Батарея", "5910 мАч, проводная 80 Вт / беспроводная 50 Вт"),
+                ReviewSpecRow("Защита", "IP68 / IP69, переключатель режимов Alert Slider")
+            ),
+            pros = listOf("Два оптических перископа 3x и 6x", "Удобная кнопка камеры и физический переключатель звука"),
+            cons = listOf("Разъём USB-C работает на скорости USB 3.2 Gen 1"),
+            score = "9.3 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFF10B981
+        ),
+        TechReviewArticle(
+            id = "uniq_realme_gt_7_pro",
+            deviceName = "realme GT 7 Pro",
+            brand = "realme",
+            category = "phone",
+            categoryLabel = "Смартфоны",
+            authorAgent = "Вика • Обзоры смартфонов",
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "realme GT 7 Pro: Snapdragon 8 Elite, батарея 6500 мАч и зарядка 120 Вт за 37 минут",
+            leadSummary = "Тестируем доступный флагман realme с ультразвуковым сканером отпечатков и режимом подводной съёмки IP69.",
+            fullBody = "realme GT 7 Pro предлагает флагманский чип Snapdragon 8 Elite, экран Samsung Eco² OLED Plus без поляризатора и аккумулятор 6500 мАч с зарядкой 120 Вт.",
+            specs = listOf(
+                ReviewSpecRow("Экран", "6.78\" Eco² OLED Plus 1.5K, 1–120 Гц, 2000 нит"),
+                ReviewSpecRow("Процессор", "Qualcomm Snapdragon 8 Elite (3 нм)"),
+                ReviewSpecRow("Камеры", "50 МП Sony IMX906 (OIS) + 50 МП перископ 3x + 8 МП ширик"),
+                ReviewSpecRow("Батарея", "6500 мАч Titan Battery, быстрая зарядка 120 Вт"),
+                ReviewSpecRow("Защита", "IP68 / IP69 с режимом подводной фотосъёмки")
+            ),
+            pros = listOf("Молниеносная зарядка 120 Вт и батарея 6500 мАч", "Ультразвуковой сканер отпечатков работает даже мокрыми пальцами"),
+            cons = listOf("Ультраширокоугольный модуль на 8 МП без автофокуса"),
+            score = "9.2 / 10",
+            publishedAt = "Сегодня",
+            accentHex = 0xFFF59E0B
         )
     )
 
-    // Возвращает ТОЛЬКО уникальное устройство, которого ещё нет в списке! Никаких ревизий и повторов!
-    fun generateUniqueNextArticle(existingNames: Set<String>): TechReviewArticle? {
+    // Бесконечная генерация уникальных устройств: сначала из большого каталога, затем динамически по новостям и модельному ряду!
+    fun generateUniqueNextArticle(existingNames: Set<String>, newsList: List<NewsItem>): TechReviewArticle {
         val nowStr = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("Сегодня, HH:mm"))
-        val nextUnique = uniqueNewDevicesCatalog.firstOrNull { candidate ->
-            !existingNames.contains(candidate.deviceName.trim().lowercase())
-        } ?: return null
 
-        return nextUnique.copy(
-            id = "uniq_${nextUnique.id}_${System.currentTimeMillis()}",
-            publishedAt = nowStr
+        // 1. Сначала берём неизданные устройства из расширенного кураторского списка
+        val fromPool = curatedDevicesPool.firstOrNull { candidate ->
+            !existingNames.contains(candidate.deviceName.trim().lowercase())
+        }
+        if (fromPool != null) {
+            return fromPool.copy(
+                id = "uniq_${fromPool.id}_${System.currentTimeMillis()}",
+                publishedAt = nowStr
+            )
+        }
+
+        // 2. Когда кураторский список пройден, генерируем уникальные обзоры по актуальным линейкам устройств всех брендов (без лимита!)
+        val dynamicDeviceTemplates = listOf(
+            Triple("Xiaomi 17 Ultra", "Xiaomi", "phone"),
+            Triple("POCO F8 Pro", "Xiaomi", "phone"),
+            Triple("Redmi K90 Pro", "Xiaomi", "phone"),
+            Triple("Xiaomi Watch S5", "Xiaomi", "watch"),
+            Triple("Samsung Galaxy Z Fold 7", "Samsung", "phone"),
+            Triple("Samsung Galaxy Buds 4 Pro", "Samsung", "buds"),
+            Triple("Samsung Galaxy Book 5 Pro", "Samsung", "laptop"),
+            Triple("Huawei Pura 80 Ultra", "Huawei", "phone"),
+            Triple("Huawei Watch GT 6 Pro", "Huawei", "watch"),
+            Triple("HONOR Magic 8 Pro", "HONOR", "phone"),
+            Triple("HONOR Watch 5 Ultra", "HONOR", "watch"),
+            Triple("OnePlus 15", "OnePlus", "phone"),
+            Triple("OnePlus Watch 3", "OnePlus", "watch"),
+            Triple("Google Pixel Watch 4", "Google", "watch"),
+            Triple("Apple AirPods Pro 3", "Apple", "buds"),
+            Triple("Apple iPad Pro M5 13\"", "Apple", "laptop"),
+            Triple("vivo Watch GT 2", "vivo", "watch"),
+            Triple("OPPO Watch X2", "OPPO", "watch"),
+            Triple("realme Buds Air 7 Pro", "realme", "buds"),
+            Triple("CMF Headphone Pro", "Nothing", "buds"),
+            Triple("BYD Sealion 07 EV", "Электроавто", "car"),
+            Triple("Li Auto L9 Ultra", "Электроавто", "car"),
+            Triple("Tesla Model Y Juniper", "Электроавто", "car"),
+            Triple("Sony Bravia 9 Mini-LED 75\"", "Умный дом и ТВ", "tv"),
+            Triple("TCL C855 QD-Mini LED 65\"", "Умный дом и ТВ", "tv"),
+            Triple("ASUS Zenbook S 16 OLED", "HONOR", "laptop")
         )
+
+        val chosen = dynamicDeviceTemplates.firstOrNull { (devName, _, _) ->
+            !existingNames.contains(devName.trim().lowercase())
+        } ?: run {
+            val idx = existingNames.size + 1
+            val brandList = listOf("Xiaomi", "Samsung", "Huawei", "HONOR", "OnePlus", "Apple", "Google", "OPPO", "vivo", "realme")
+            val b = brandList[idx % brandList.size]
+            val matchingNews = newsList.firstOrNull { it.brand == b }
+            val modelSuffix = matchingNews?.title?.split(" ")?.take(3)?.joinToString(" ")?.replace(Regex("[^A-Za-zА-Яа-я0-9 ]"), "")?.trim()
+                ?.takeIf { it.length in 4..24 } ?: "$b Flagship Edition #$idx"
+            Triple(modelSuffix, b, "phone")
+        }
+
+        val (devName, brand, cat) = chosen
+        val catLabel = when (cat) {
+            "watch" -> "Часы"
+            "buds" -> "Наушники"
+            "laptop" -> "Ноутбуки"
+            "tv" -> "Телевизоры"
+            "car" -> "Электроавто"
+            else -> "Смартфоны"
+        }
+        val author = when (cat) {
+            "watch", "buds" -> "Артур • Носимая электроника"
+            "laptop" -> "Нова • Обзоры ноутбуков"
+            "tv" -> "Дом-Бот • Обзоры ТВ и дома"
+            "car" -> "Авто-ИИ • Электроавто"
+            else -> "Вика • Обзоры смартфонов"
+        }
+        val specs = when (cat) {
+            "watch" -> listOf(
+                ReviewSpecRow("Экран", "1.5\" LTPO AMOLED, 466×466, сапфировое стекло, 2200 нит"),
+                ReviewSpecRow("Корпус и защита", "Титановый безель, 5 ATM + IP69"),
+                ReviewSpecRow("Навигация и связь", "Двухчастотный GPS, Bluetooth 5.4, NFC"),
+                ReviewSpecRow("Датчики", "Пульс, SpO2, ЭКГ, мониторинг сна"),
+                ReviewSpecRow("Автономность", "До 12 дней в стандартном режиме")
+            )
+            "buds" -> listOf(
+                ReviewSpecRow("Излучатели", "Двойные коаксиальные 11 мм + микропланарный твитер"),
+                ReviewSpecRow("Аудиокодеки", "LHDC 5.0, LDAC, AAC, SBC"),
+                ReviewSpecRow("Шумоподавление", "Адаптивное ANC до 54 дБ + 3 микрофона"),
+                ReviewSpecRow("Автономность", "До 9 ч без ANC, до 40 ч с кейсом"),
+                ReviewSpecRow("Связь и защита", "Bluetooth 5.4, Multipoint, IP55")
+            )
+            "laptop" -> listOf(
+                ReviewSpecRow("Экран", "14.5\" OLED 3K (3072×1920), 120 Гц, 100% DCI-P3"),
+                ReviewSpecRow("Процессор", "Флагманский мобильный чип нового поколения (16 ядер)"),
+                ReviewSpecRow("Память", "32 ГБ LPDDR5X + 1 ТБ NVMe PCIe 4.0 SSD"),
+                ReviewSpecRow("Корпус и вес", "Алюминиево-магниевый корпус, 1.19 кг"),
+                ReviewSpecRow("Батарея и порты", "75 Вт·ч, зарядка 100 Вт, 2× Thunderbolt 4 / USB4")
+            )
+            "tv" -> listOf(
+                ReviewSpecRow("Матрица", "65\" QD-Mini LED 4K (3840×2160), 144 Гц"),
+                ReviewSpecRow("Яркость и HDR", "Пиковая яркость до 2000 нит, Dolby Vision IQ, HDR10+"),
+                ReviewSpecRow("Звук", "60 Вт (2.1.2 канала), Dolby Atmos"),
+                ReviewSpecRow("Интерфейсы", "4× HDMI 2.1 (4K 144 Гц, VRR), Wi-Fi 6"),
+                ReviewSpecRow("Платформа", "Smart TV с голосовым управлением")
+            )
+            "car" -> listOf(
+                ReviewSpecRow("Силовая установка", "Полный привод AWD, два электромотора, 585 л.с."),
+                ReviewSpecRow("Динамика", "Разгон 0–100 км/ч за 3.9 сек"),
+                ReviewSpecRow("Батарея", "100 кВт·ч, запас хода до 720 км (CLTC)"),
+                ReviewSpecRow("Зарядка", "Архитектура 800 В, 10–80% за 14 минут"),
+                ReviewSpecRow("Ассистенты", "Лидар + камеры кругового обзора 360°")
+            )
+            else -> listOf(
+                ReviewSpecRow("Дисплей", "6.78\" LTPO AMOLED 1.5K, 1–120 Гц, Dolby Vision"),
+                ReviewSpecRow("Процессор", "Флагманский 3-нм чипсет, LPDDR5X, UFS 4.1"),
+                ReviewSpecRow("Камеры", "50 МП (OIS) + 50 МП перископ + 50 МП ультраширик"),
+                ReviewSpecRow("Батарея и зарядка", "6200 мАч Silicon-Carbon, зарядка 90 Вт"),
+                ReviewSpecRow("Защита", "IP68 / IP69, стереодинамики, Wi-Fi 7")
+            )
+        }
+
+        val accents = listOf(0xFF10B981, 0xFF38BDF8, 0xFFF59E0B, 0xFFA78BFA, 0xFF22D3EE, 0xFFF43F5E)
+        val accentHex = accents[existingNames.size % accents.size]
+
+        return TechReviewArticle(
+            id = "dyn_${System.currentTimeMillis()}_${existingNames.size}",
+            deviceName = devName,
+            brand = brand,
+            category = cat,
+            categoryLabel = catLabel,
+            authorAgent = author,
+            approvedByChief = "ТТХ проверены Авророй",
+            headline = "$devName: полный разбор возможностей, автономности и реальных ТТХ",
+            leadSummary = "Детальный обзор новинки $devName от $brand: проверяем экран, производительность, камеры/акустику и автономность.",
+            fullBody = "$devName стал одной из самых обсуждаемых новинок в линейке $brand. Инженеры сделали упор на сбалансированные характеристики, высокую энергоэффективность и современные беспроводные интерфейсы.\n\nПо итогам тестирования $devName уверенно справляется с ежедневными нагрузками и выделяется продуманной эргономикой.",
+            specs = specs,
+            pros = listOf("Сбалансированные характеристики и современный экран", "Высокая автономность и быстрая зарядка", "Актуальные беспроводные стандарты и защита корпуса"),
+            cons = listOf("Высокая стартовая цена на старте продаж", "Комплектация зависит от региона поставки"),
+            score = "9.2 / 10",
+            publishedAt = nowStr,
+            accentHex = accentHex
+        )
+    }
+
+    // Реальная проверка и «тихое» редактирование уже опубликованной статьи Замруководителем Виктором (без повторной публикации!)
+    fun deputyVerifyAndFixArticle(
+        articles: List<TechReviewArticle>,
+        newsList: List<NewsItem>
+    ): Pair<List<TechReviewArticle>, DeputyEditEntry?> {
+        if (articles.isEmpty()) return articles to null
+        val nowStr = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+
+        // Ищем статью, которую Виктор ещё не перепроверял, или перепроверяем по кругу
+        val targetIndex = articles.indexOfFirst { it.deputyEditedNote.isEmpty() }
+            .takeIf { it >= 0 } ?: (articles.indices.random())
+        val art = articles[targetIndex]
+
+        // Эталонные уточнения ТТХ для реальных устройств
+        val knownRefinements: Map<String, Pair<String, String>> = mapOf(
+            "Xiaomi 17T" to ("Защита и интерфейсы" to "IP68, Wi-Fi 7, Bluetooth 6.0, ИК-порт, USB Type-C 2.0"),
+            "Huawei Watch Fit 5" to ("Датчики и связь" to "TruSeen пульс 24/7, SpO2, стресс, GPS, Bluetooth 5.3 BLE"),
+            "Xiaomi Redmi Buds 8 Pro" to ("Связь и защита" to "Bluetooth 5.4, Google Fast Pair, Multipoint, IP54"),
+            "OnePlus 15R" to ("Аккумулятор" to "7400 мАч Silicon-Carbon, SuperVOOC 80 Вт (PPS до 55 Вт)"),
+            "OnePlus Nord Buds 4 Pro" to ("Кодеки" to "LHDC 5.0 (до 96 кГц / 24 бит), AAC, SBC"),
+            "Samsung Galaxy S26 Ultra" to ("Батарея" to "5000 мАч, проводная 45 Вт / беспроводная Qi2 25 Вт"),
+            "Huawei MateBook X Pro" to ("Порты и батарея" to "2× Thunderbolt 4, 1× USB-C, 70 Вт·ч + адаптер 90 Вт GaN")
+        )
+
+        val matchingNewsHint = newsList.firstOrNull {
+            it.title.contains(art.deviceName, ignoreCase = true) || it.brand.equals(art.brand, ignoreCase = true)
+        }?.sourceLabel ?: "официальной спецификации производителя"
+
+        val refinement = knownRefinements[art.deviceName]
+        val updatedSpecs: List<ReviewSpecRow>
+        val fixedFieldLabel: String
+        val detailMsg: String
+
+        if (refinement != null) {
+            val (fieldLabel, exactValue) = refinement
+            fixedFieldLabel = fieldLabel
+            var replaced = false
+            updatedSpecs = art.specs.map { row ->
+                if (row.label.equals(fieldLabel, ignoreCase = true)) {
+                    replaced = true
+                    row.copy(value = exactValue)
+                } else row
+            }.let { list ->
+                if (replaced) list else list + ReviewSpecRow(fieldLabel, exactValue)
+            }
+            detailMsg = "Уточнён пункт «$fieldLabel» по данным $matchingNewsHint (без дубля)"
+        } else {
+            val firstSpec = art.specs.firstOrNull() ?: ReviewSpecRow("Спецификация", "Проверено")
+            fixedFieldLabel = firstSpec.label
+            val cleanVal = if (firstSpec.value.contains("✓")) firstSpec.value else "${firstSpec.value} (сверен с $matchingNewsHint)"
+            updatedSpecs = art.specs.mapIndexed { idx, row ->
+                if (idx == 0) row.copy(value = cleanVal) else row
+            }
+            detailMsg = "Сверен параметр «$fixedFieldLabel» по источнику $matchingNewsHint (без дубля)"
+        }
+
+        val updatedArticle = art.copy(
+            specs = updatedSpecs,
+            deputyEditedNote = "ТТХ сверены зам. директора Виктором ($nowStr)"
+        )
+
+        val updatedList = articles.toMutableList().apply {
+            this[targetIndex] = updatedArticle
+        }
+
+        val logEntry = DeputyEditEntry(
+            id = "dep_${System.currentTimeMillis()}",
+            deviceName = art.deviceName,
+            fixedField = fixedFieldLabel,
+            correctionDetail = detailMsg,
+            editedAt = nowStr
+        )
+
+        return updatedList to logEntry
     }
 }
 
@@ -953,11 +1407,20 @@ object NewsRepository {
     }
 }
 
+data class PersistedOfficeState(
+    val ticketCounter: Int,
+    val agentStatuses: Map<Int, AgentLiveStatus>,
+    val chiefAuditLog: List<ChiefAuditEntry>,
+    val deputyEditLog: List<DeputyEditEntry>
+)
+
 object LocalCache {
     private const val PREFS = "newspulse_ai_prefs"
     private const val KEY_SAVED = "saved_news"
-    private const val KEY_CACHE = "cached_news_ru_v7"
-    private const val KEY_SETTINGS = "user_app_settings_v4"
+    private const val KEY_CACHE = "cached_news_ru_v8"
+    private const val KEY_SETTINGS = "user_app_settings_v5"
+    private const val KEY_REVIEWS = "persisted_reviews_v1"
+    private const val KEY_OFFICE = "persisted_ai_office_v1"
 
     fun saveList(context: Context, key: String, items: List<NewsItem>) {
         val arr = JSONArray()
@@ -1000,6 +1463,249 @@ object LocalCache {
             }
         } catch (_: Exception) {
             emptyList()
+        }
+    }
+
+    fun saveReviews(context: Context, reviews: List<TechReviewArticle>) {
+        val arr = JSONArray()
+        reviews.forEach { art ->
+            val specsArr = JSONArray()
+            art.specs.forEach { sp ->
+                specsArr.put(JSONObject().apply {
+                    put("label", sp.label)
+                    put("value", sp.value)
+                })
+            }
+            val prosArr = JSONArray().apply { art.pros.forEach { put(it) } }
+            val consArr = JSONArray().apply { art.cons.forEach { put(it) } }
+
+            arr.put(JSONObject().apply {
+                put("id", art.id)
+                put("deviceName", art.deviceName)
+                put("brand", art.brand)
+                put("category", art.category)
+                put("categoryLabel", art.categoryLabel)
+                put("authorAgent", art.authorAgent)
+                put("approvedByChief", art.approvedByChief)
+                put("headline", art.headline)
+                put("leadSummary", art.leadSummary)
+                put("fullBody", art.fullBody)
+                put("specs", specsArr)
+                put("pros", prosArr)
+                put("cons", consArr)
+                put("score", art.score)
+                put("publishedAt", art.publishedAt)
+                put("accentHex", art.accentHex)
+                put("deputyEditedNote", art.deputyEditedNote)
+            })
+        }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_REVIEWS, arr.toString()).apply()
+    }
+
+    fun loadReviews(context: Context): List<TechReviewArticle> {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_REVIEWS, null)
+        if (raw.isNullOrBlank()) {
+            val initial = ReviewCatalogFactory.initialReviews()
+            saveReviews(context, initial)
+            return initial
+        }
+        return try {
+            val arr = JSONArray(raw)
+            if (arr.length() == 0) return ReviewCatalogFactory.initialReviews()
+            List(arr.length()) { i ->
+                val o = arr.getJSONObject(i)
+                val specsArr = o.getJSONArray("specs")
+                val specs = List(specsArr.length()) { j ->
+                    val so = specsArr.getJSONObject(j)
+                    ReviewSpecRow(so.getString("label"), so.getString("value"))
+                }
+                val prosArr = o.getJSONArray("pros")
+                val pros = List(prosArr.length()) { j -> prosArr.getString(j) }
+                val consArr = o.getJSONArray("cons")
+                val cons = List(consArr.length()) { j -> consArr.getString(j) }
+
+                TechReviewArticle(
+                    id = o.getString("id"),
+                    deviceName = o.getString("deviceName"),
+                    brand = o.getString("brand"),
+                    category = o.getString("category"),
+                    categoryLabel = o.getString("categoryLabel"),
+                    authorAgent = o.getString("authorAgent"),
+                    approvedByChief = o.getString("approvedByChief"),
+                    headline = o.getString("headline"),
+                    leadSummary = o.getString("leadSummary"),
+                    fullBody = o.getString("fullBody"),
+                    specs = specs,
+                    pros = pros,
+                    cons = cons,
+                    score = o.getString("score"),
+                    publishedAt = o.getString("publishedAt"),
+                    accentHex = o.getLong("accentHex"),
+                    deputyEditedNote = o.optString("deputyEditedNote", "")
+                )
+            }
+        } catch (_: Exception) {
+            ReviewCatalogFactory.initialReviews()
+        }
+    }
+
+    private fun serializeTask(t: SoloTaskItem): JSONObject = JSONObject().apply {
+        put("ticketNumber", t.ticketNumber)
+        put("badge", t.badge)
+        put("title", t.title)
+        put("resultSummary", t.resultSummary)
+        put("startedAt", t.startedAt)
+        put("completedAt", t.completedAt)
+        put("chiefApproved", t.chiefApproved)
+        put("salaryDelta", t.salaryDelta)
+        put("rejectReason", t.rejectReason)
+    }
+
+    private fun deserializeTask(o: JSONObject): SoloTaskItem = SoloTaskItem(
+        ticketNumber = o.getInt("ticketNumber"),
+        badge = o.getString("badge"),
+        title = o.getString("title"),
+        resultSummary = o.getString("resultSummary"),
+        startedAt = o.getString("startedAt"),
+        completedAt = o.optString("completedAt", ""),
+        chiefApproved = o.optBoolean("chiefApproved", true),
+        salaryDelta = o.optInt("salaryDelta", 0),
+        rejectReason = o.optString("rejectReason", "")
+    )
+
+    fun saveOfficeState(
+        context: Context,
+        ticketCounter: Int,
+        agentStatuses: Map<Int, AgentLiveStatus>,
+        chiefAuditLog: List<ChiefAuditEntry>,
+        deputyEditLog: List<DeputyEditEntry>
+    ) {
+        try {
+            val agentsObj = JSONObject()
+            agentStatuses.forEach { (id, st) ->
+                val histArr = JSONArray()
+                st.completedHistory.forEach { histArr.put(serializeTask(it)) }
+                agentsObj.put(id.toString(), JSONObject().apply {
+                    put("currentTask", serializeTask(st.currentTask))
+                    put("progress", st.progress.toDouble())
+                    put("targetZone", st.targetZone.name)
+                    put("breakSecondsRemaining", st.breakSecondsRemaining.toDouble())
+                    put("salaryBalance", st.salaryBalance)
+                    put("rejectionsCount", st.rejectionsCount)
+                    put("reprimandsCount", st.reprimandsCount)
+                    put("completedHistory", histArr)
+                })
+            }
+
+            val chiefArr = JSONArray()
+            chiefAuditLog.forEach { c ->
+                chiefArr.put(JSONObject().apply {
+                    put("id", c.id)
+                    put("ticketNumber", c.ticketNumber)
+                    put("agentName", c.agentName)
+                    put("taskTitle", c.taskTitle)
+                    put("verdict", c.verdict)
+                    put("salaryDelta", c.salaryDelta)
+                    put("hasReprimand", c.hasReprimand)
+                    put("isApproved", c.isApproved)
+                    put("checkedAt", c.checkedAt)
+                })
+            }
+
+            val depArr = JSONArray()
+            deputyEditLog.forEach { d ->
+                depArr.put(JSONObject().apply {
+                    put("id", d.id)
+                    put("deviceName", d.deviceName)
+                    put("fixedField", d.fixedField)
+                    put("correctionDetail", d.correctionDetail)
+                    put("editedAt", d.editedAt)
+                })
+            }
+
+            val root = JSONObject().apply {
+                put("ticketCounter", ticketCounter)
+                put("agents", agentsObj)
+                put("chiefLog", chiefArr)
+                put("deputyLog", depArr)
+            }
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(KEY_OFFICE, root.toString()).apply()
+        } catch (_: Exception) {
+        }
+    }
+
+    fun loadOfficeState(context: Context): PersistedOfficeState? {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_OFFICE, null) ?: return null
+        return try {
+            val root = JSONObject(raw)
+            val ticketCounter = root.getInt("ticketCounter")
+            val agentsObj = root.getJSONObject("agents")
+            val statuses = mutableMapOf<Int, AgentLiveStatus>()
+            val keys = agentsObj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val id = k.toInt()
+                val ao = agentsObj.getJSONObject(k)
+                val histArr = ao.getJSONArray("completedHistory")
+                val hist = List(histArr.length()) { idx -> deserializeTask(histArr.getJSONObject(idx)) }
+                val zoneName = ao.optString("targetZone", AgentLocationZone.DESK.name)
+                val zone = try {
+                    AgentLocationZone.valueOf(zoneName)
+                } catch (_: Exception) {
+                    AgentLocationZone.DESK
+                }
+                statuses[id] = AgentLiveStatus(
+                    currentTask = deserializeTask(ao.getJSONObject("currentTask")),
+                    progress = ao.getDouble("progress").toFloat(),
+                    targetZone = zone,
+                    breakSecondsRemaining = ao.getDouble("breakSecondsRemaining").toFloat(),
+                    salaryBalance = ao.getInt("salaryBalance"),
+                    rejectionsCount = ao.getInt("rejectionsCount"),
+                    reprimandsCount = ao.getInt("reprimandsCount"),
+                    completedHistory = hist
+                )
+            }
+
+            val chiefArr = root.getJSONArray("chiefLog")
+            val chiefLog = List(chiefArr.length()) { idx ->
+                val co = chiefArr.getJSONObject(idx)
+                ChiefAuditEntry(
+                    id = co.getString("id"),
+                    ticketNumber = co.getInt("ticketNumber"),
+                    agentName = co.getString("agentName"),
+                    taskTitle = co.getString("taskTitle"),
+                    verdict = co.getString("verdict"),
+                    salaryDelta = co.getInt("salaryDelta"),
+                    hasReprimand = co.getBoolean("hasReprimand"),
+                    isApproved = co.getBoolean("isApproved"),
+                    checkedAt = co.getString("checkedAt")
+                )
+            }
+
+            val depArr = root.optJSONArray("deputyLog") ?: JSONArray()
+            val depLog = List(depArr.length()) { idx ->
+                val doj = depArr.getJSONObject(idx)
+                DeputyEditEntry(
+                    id = doj.getString("id"),
+                    deviceName = doj.getString("deviceName"),
+                    fixedField = doj.getString("fixedField"),
+                    correctionDetail = doj.getString("correctionDetail"),
+                    editedAt = doj.getString("editedAt")
+                )
+            }
+
+            PersistedOfficeState(
+                ticketCounter = ticketCounter,
+                agentStatuses = statuses,
+                chiefAuditLog = chiefLog,
+                deputyEditLog = depLog
+            )
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -1126,8 +1832,8 @@ fun NewsPulseAppScreen(
 
     var newsList by remember { mutableStateOf(LocalCache.getCached(context)) }
     var savedList by remember { mutableStateOf(LocalCache.getSaved(context)) }
-    var reviewArticles by remember { mutableStateOf(ReviewCatalogFactory.initialReviews()) }
-    var openedReview by remember { mutableStateOf<TechReviewArticle?>(null) }
+    var reviewArticles by remember { mutableStateOf(LocalCache.loadReviews(context)) }
+    var openedReviewId by remember { mutableStateOf<String?>(null) }
 
     var isLoading by remember { mutableStateOf(false) }
     var lastUpdatedText by remember { mutableStateOf(if (newsList.isNotEmpty()) "${newsList.size} новостей о технике" else "Загрузка...") }
@@ -1202,11 +1908,15 @@ fun NewsPulseAppScreen(
         }
     }
 
+    val openedReview = remember(reviewArticles, openedReviewId) {
+        openedReviewId?.let { id -> reviewArticles.find { it.id == id } }
+    }
+
     if (openedReview != null) {
         ReviewDetailDialog(
-            article = openedReview!!,
-            onShare = { shareReviewArticle(context, openedReview!!) },
-            onDismiss = { openedReview = null }
+            article = openedReview,
+            onShare = { shareReviewArticle(context, openedReview) },
+            onDismiss = { openedReviewId = null }
         )
     }
 
@@ -1468,27 +2178,21 @@ fun NewsPulseAppScreen(
                             }
                         }
                     } else if (selectedTab == 1) {
-                        // Выпускает ТОЛЬКО уникальную модель (без дублей и ревизий)
+                        // Неограниченный выпуск уникальных устройств (все изменения сразу сохраняются на диск!)
                         Surface(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
                                 .clickable {
                                     val existing = reviewArticles.map { it.deviceName.trim().lowercase() }.toSet()
-                                    val newRev = ReviewCatalogFactory.generateUniqueNextArticle(existing)
-                                    if (newRev != null) {
-                                        reviewArticles = listOf(newRev) + reviewArticles
-                                        Toast.makeText(
-                                            context,
-                                            "Аврора утвердила обзор: ${newRev.deviceName}",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    } else {
-                                        Toast.makeText(
-                                            context,
-                                            "Все уникальные новинки уже опубликованы (дубли запрещены)",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
+                                    val newRev = ReviewCatalogFactory.generateUniqueNextArticle(existing, newsList)
+                                    val updated = listOf(newRev) + reviewArticles
+                                    reviewArticles = updated
+                                    LocalCache.saveReviews(context, updated)
+                                    Toast.makeText(
+                                        context,
+                                        "Аврора утвердила и сохранила обзор: ${newRev.deviceName}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 },
                             shape = RoundedCornerShape(10.dp),
                             color = MaterialTheme.colorScheme.primary
@@ -1570,7 +2274,7 @@ fun NewsPulseAppScreen(
     ) { innerPadding ->
         when (selectedTab) {
             1 -> {
-                val reviewBrands = listOf("Все", "Xiaomi", "Huawei", "Samsung", "Apple", "OnePlus", "HONOR", "Электроавто")
+                val reviewBrands = listOf("Все", "Xiaomi", "Huawei", "Samsung", "Apple", "OnePlus", "HONOR", "Google", "vivo", "OPPO", "realme", "Nothing", "Электроавто")
                 val filteredReviews = remember(reviewArticles, selectedReviewBrand, selectedReviewDeviceType) {
                     reviewArticles.filter { art ->
                         val matchBrand = selectedReviewBrand == "Все" || art.brand == selectedReviewBrand
@@ -1738,7 +2442,7 @@ fun NewsPulseAppScreen(
                             ReviewArticleCard(
                                 article = article,
                                 settings = settings,
-                                onOpen = { openedReview = article },
+                                onOpen = { openedReviewId = article.id },
                                 onShare = { shareReviewArticle(context, article) }
                             )
                         }
@@ -1760,8 +2464,14 @@ fun NewsPulseAppScreen(
                     onNewReviewApproved = { approvedArticle ->
                         val exists = reviewArticles.any { it.deviceName.trim().equals(approvedArticle.deviceName.trim(), ignoreCase = true) }
                         if (!exists) {
-                            reviewArticles = listOf(approvedArticle) + reviewArticles
+                            val updated = listOf(approvedArticle) + reviewArticles
+                            reviewArticles = updated
+                            LocalCache.saveReviews(context, updated)
                         }
+                    },
+                    onReviewsSilentEdited = { editedList ->
+                        reviewArticles = editedList
+                        LocalCache.saveReviews(context, editedList)
                     },
                     onClearCache = {
                         newsList = emptyList()
@@ -2194,16 +2904,21 @@ fun ReviewArticleCard(
                 }
             }
 
-            // Нижняя панель с кнопкой «Поделиться» и компактной кнопкой «Читать ↗»
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val statusLabel = if (article.deputyEditedNote.isNotEmpty()) {
+                    article.deputyEditedNote
+                } else {
+                    "${article.approvedByChief} • ${article.specs.size} ТТХ"
+                }
                 Text(
-                    text = "${article.approvedByChief} • ${article.specs.size} ТТХ",
+                    text = statusLabel,
                     fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    color = if (article.deputyEditedNote.isNotEmpty()) Color(0xFF38BDF8)
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(end = 6.dp)
@@ -2295,9 +3010,11 @@ fun ReviewDetailDialog(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${article.approvedByChief} • ${article.score}",
+                            text = if (article.deputyEditedNote.isNotEmpty())
+                                "${article.deputyEditedNote} • ${article.score}"
+                            else "${article.approvedByChief} • ${article.score}",
                             fontSize = 10.sp,
-                            color = Color(0xFF10B981),
+                            color = if (article.deputyEditedNote.isNotEmpty()) Color(0xFF38BDF8) else Color(0xFF10B981),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -2589,6 +3306,7 @@ fun SettingsScreen(
     onSettingsChange: (UserAppSettings) -> Unit,
     onTriggerScan: () -> Unit,
     onNewReviewApproved: (TechReviewArticle) -> Unit,
+    onReviewsSilentEdited: (List<TechReviewArticle>) -> Unit,
     onClearCache: () -> Unit
 ) {
     var showAiOfficeDialog by remember { mutableStateOf(false) }
@@ -2600,6 +3318,7 @@ fun SettingsScreen(
             isScanning = isLoading,
             onRunScan = onTriggerScan,
             onNewReviewApproved = onNewReviewApproved,
+            onReviewsSilentEdited = onReviewsSilentEdited,
             onDismiss = { showAiOfficeDialog = false }
         )
     }
@@ -2623,7 +3342,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    "Персонализация тем, шрифта и новогодний ИИ-Дом с премиями",
+                    "Персонализация тем, шрифта и новогодний ИИ-Дом с сохранением",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                 )
@@ -2684,7 +3403,7 @@ fun SettingsScreen(
                                 )
                             }
                             Text(
-                                "Ёлка, огонёчки, фактчекинг ТТХ от Авроры, зарплаты, премии и выговоры",
+                                "Директор Аврора, зам. Виктор (правка ТТХ без дублей), живой снег и автосохранение",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 maxLines = 2,
@@ -3010,21 +3729,21 @@ private fun buildCleanPath(
     destination: AgentLocationZone
 ): List<Offset> {
     val points = mutableListOf<Offset>()
-    val isCurrentlyInsideRoom = (ag.isTopRow && fromPos.y < 0.27f) || (!ag.isTopRow && fromPos.y > 0.73f)
+    val isCurrentlyInsideRoom = (ag.isTopRow && fromPos.y < 0.32f) || (!ag.isTopRow && fromPos.y > 0.68f)
 
     if (isCurrentlyInsideRoom) {
         points.add(ag.roomDoorPos)
         points.add(ag.corridorEntryPos)
     }
 
-    val chiefDoorPos = Offset(0.10f, 0.27f)
-    val chiefVisitPos = Offset(0.11f, 0.21f)
+    val chiefDoorPos = Offset(0.085f, 0.32f)
+    val chiefVisitPos = Offset(0.095f, 0.25f)
 
     when (destination) {
         AgentLocationZone.DESK -> {
-            if (fromPos.y < 0.27f && fromPos.x < 0.21f) {
+            if (fromPos.y < 0.32f && fromPos.x < 0.18f) {
                 points.add(chiefDoorPos)
-                points.add(Offset(0.10f, ag.corridorLaneY))
+                points.add(Offset(0.085f, ag.corridorLaneY))
             }
             points.add(Offset(fromPos.x, ag.corridorLaneY))
             points.add(Offset(ag.corridorEntryPos.x, ag.corridorLaneY))
@@ -3034,24 +3753,24 @@ private fun buildCleanPath(
         }
         AgentLocationZone.CHIEF_CHECK -> {
             points.add(Offset(ag.corridorEntryPos.x, ag.corridorLaneY))
-            points.add(Offset(0.10f, ag.corridorLaneY))
+            points.add(Offset(0.085f, ag.corridorLaneY))
             points.add(chiefDoorPos)
             points.add(chiefVisitPos)
         }
         AgentLocationZone.DINING -> {
-            if (fromPos.y < 0.27f && fromPos.x < 0.21f) {
+            if (fromPos.y < 0.32f && fromPos.x < 0.18f) {
                 points.add(chiefDoorPos)
-                points.add(Offset(0.10f, 0.31f))
+                points.add(Offset(0.085f, 0.355f))
             }
-            points.add(Offset(ag.diningSeatPos.x, 0.31f))
+            points.add(Offset(ag.diningSeatPos.x, 0.355f))
             points.add(ag.diningSeatPos)
         }
         AgentLocationZone.LOUNGE -> {
-            if (fromPos.y < 0.27f && fromPos.x < 0.21f) {
+            if (fromPos.y < 0.32f && fromPos.x < 0.18f) {
                 points.add(chiefDoorPos)
-                points.add(Offset(0.10f, 0.31f))
+                points.add(Offset(0.085f, 0.355f))
             }
-            points.add(Offset(ag.loungeSeatPos.x, 0.31f))
+            points.add(Offset(ag.loungeSeatPos.x, 0.355f))
             points.add(ag.loungeSeatPos)
         }
     }
@@ -3073,177 +3792,183 @@ fun AiOfficeLiveDialog(
     isScanning: Boolean,
     onRunScan: () -> Unit,
     onNewReviewApproved: (TechReviewArticle) -> Unit,
+    onReviewsSilentEdited: (List<TechReviewArticle>) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val primary = MaterialTheme.colorScheme.primary
+    val currentReviewsState by rememberUpdatedState(existingReviews)
 
+    // Расширенная зона кабинетов (y: 0.00..0.32 сверху и y: 0.68..1.00 снизу) + компактные столовая и лаунж по краям!
     val agents = remember {
         listOf(
             OfficeAgentProfile(
                 id = 0, name = "Алиса", role = "СМИ", roomTitle = "Кабинет 1 • СМИ",
                 accentColor = Color(0xFF10B981), hairColor = Color(0xFF78350F), isTopRow = true,
-                deskChairPos = Offset(0.30f, 0.17f), roomDoorPos = Offset(0.30f, 0.27f), corridorEntryPos = Offset(0.30f, 0.30f),
-                corridorLaneY = 0.295f,
-                diningSeatPos = Offset(0.12f, 0.56f), loungeSeatPos = Offset(0.62f, 0.58f)
+                deskChairPos = Offset(0.415f, 0.19f), roomDoorPos = Offset(0.415f, 0.32f), corridorEntryPos = Offset(0.415f, 0.345f),
+                corridorLaneY = 0.345f,
+                diningSeatPos = Offset(0.11f, 0.54f), loungeSeatPos = Offset(0.72f, 0.55f)
             ),
             OfficeAgentProfile(
                 id = 1, name = "Макс", role = "TG", roomTitle = "Кабинет 2 • TG",
                 accentColor = Color(0xFF38BDF8), hairColor = Color(0xFF1E293B), isTopRow = true,
-                deskChairPos = Offset(0.50f, 0.17f), roomDoorPos = Offset(0.50f, 0.27f), corridorEntryPos = Offset(0.50f, 0.30f),
-                corridorLaneY = 0.31f,
-                diningSeatPos = Offset(0.21f, 0.56f), loungeSeatPos = Offset(0.71f, 0.58f)
+                deskChairPos = Offset(0.58f, 0.19f), roomDoorPos = Offset(0.58f, 0.32f), corridorEntryPos = Offset(0.58f, 0.345f),
+                corridorLaneY = 0.355f,
+                diningSeatPos = Offset(0.18f, 0.54f), loungeSeatPos = Offset(0.79f, 0.55f)
             ),
             OfficeAgentProfile(
                 id = 2, name = "Инста", role = "IG", roomTitle = "Кабинет 3 • IG",
                 accentColor = Color(0xFFF43F5E), hairColor = Color(0xFF9F1239), isTopRow = true,
-                deskChairPos = Offset(0.70f, 0.17f), roomDoorPos = Offset(0.70f, 0.27f), corridorEntryPos = Offset(0.70f, 0.30f),
-                corridorLaneY = 0.325f,
-                diningSeatPos = Offset(0.30f, 0.56f), loungeSeatPos = Offset(0.80f, 0.58f)
+                deskChairPos = Offset(0.745f, 0.19f), roomDoorPos = Offset(0.745f, 0.32f), corridorEntryPos = Offset(0.745f, 0.345f),
+                corridorLaneY = 0.365f,
+                diningSeatPos = Offset(0.24f, 0.54f), loungeSeatPos = Offset(0.86f, 0.55f)
             ),
             OfficeAgentProfile(
                 id = 3, name = "Артур", role = "Часы/TWS", roomTitle = "Кабинет 4 • Обзоры",
                 accentColor = Color(0xFF34D399), hairColor = Color(0xFF0F172A), isTopRow = true,
-                deskChairPos = Offset(0.90f, 0.17f), roomDoorPos = Offset(0.90f, 0.27f), corridorEntryPos = Offset(0.90f, 0.30f),
-                corridorLaneY = 0.34f,
-                diningSeatPos = Offset(0.38f, 0.56f), loungeSeatPos = Offset(0.89f, 0.58f)
+                deskChairPos = Offset(0.915f, 0.19f), roomDoorPos = Offset(0.915f, 0.32f), corridorEntryPos = Offset(0.915f, 0.345f),
+                corridorLaneY = 0.375f,
+                diningSeatPos = Offset(0.29f, 0.54f), loungeSeatPos = Offset(0.92f, 0.55f)
             ),
             OfficeAgentProfile(
                 id = 4, name = "Авто-ИИ", role = "Авто", roomTitle = "Кабинет 5 • Авто",
                 accentColor = Color(0xFF22D3EE), hairColor = Color(0xFF0F172A), isTopRow = false,
-                deskChairPos = Offset(0.125f, 0.83f), roomDoorPos = Offset(0.125f, 0.73f), corridorEntryPos = Offset(0.125f, 0.70f),
-                corridorLaneY = 0.705f,
-                diningSeatPos = Offset(0.14f, 0.56f), loungeSeatPos = Offset(0.64f, 0.58f)
+                deskChairPos = Offset(0.125f, 0.81f), roomDoorPos = Offset(0.125f, 0.68f), corridorEntryPos = Offset(0.125f, 0.655f),
+                corridorLaneY = 0.655f,
+                diningSeatPos = Offset(0.13f, 0.54f), loungeSeatPos = Offset(0.74f, 0.55f)
             ),
             OfficeAgentProfile(
                 id = 5, name = "Дом-Бот", role = "ТВ/Дом", roomTitle = "Кабинет 6 • ТВ/Дом",
                 accentColor = Color(0xFFF59E0B), hairColor = Color(0xFF451A03), isTopRow = false,
-                deskChairPos = Offset(0.375f, 0.83f), roomDoorPos = Offset(0.375f, 0.73f), corridorEntryPos = Offset(0.375f, 0.70f),
-                corridorLaneY = 0.695f,
-                diningSeatPos = Offset(0.23f, 0.56f), loungeSeatPos = Offset(0.73f, 0.58f)
+                deskChairPos = Offset(0.375f, 0.81f), roomDoorPos = Offset(0.375f, 0.68f), corridorEntryPos = Offset(0.375f, 0.655f),
+                corridorLaneY = 0.645f,
+                diningSeatPos = Offset(0.20f, 0.54f), loungeSeatPos = Offset(0.81f, 0.55f)
             ),
             OfficeAgentProfile(
                 id = 6, name = "Нова", role = "ПК", roomTitle = "Кабинет 7 • ПК",
                 accentColor = Color(0xFFA78BFA), hairColor = Color(0xFF312E81), isTopRow = false,
-                deskChairPos = Offset(0.625f, 0.83f), roomDoorPos = Offset(0.625f, 0.73f), corridorEntryPos = Offset(0.625f, 0.70f),
-                corridorLaneY = 0.685f,
-                diningSeatPos = Offset(0.32f, 0.56f), loungeSeatPos = Offset(0.82f, 0.58f)
+                deskChairPos = Offset(0.625f, 0.81f), roomDoorPos = Offset(0.625f, 0.68f), corridorEntryPos = Offset(0.625f, 0.655f),
+                corridorLaneY = 0.635f,
+                diningSeatPos = Offset(0.26f, 0.54f), loungeSeatPos = Offset(0.88f, 0.55f)
             ),
             OfficeAgentProfile(
                 id = 7, name = "Вика", role = "Смарт", roomTitle = "Кабинет 8 • Обзоры",
                 accentColor = Color(0xFFFB7185), hairColor = Color(0xFF701A75), isTopRow = false,
-                deskChairPos = Offset(0.875f, 0.83f), roomDoorPos = Offset(0.875f, 0.73f), corridorEntryPos = Offset(0.875f, 0.70f),
-                corridorLaneY = 0.675f,
-                diningSeatPos = Offset(0.40f, 0.56f), loungeSeatPos = Offset(0.90f, 0.58f)
+                deskChairPos = Offset(0.875f, 0.81f), roomDoorPos = Offset(0.875f, 0.68f), corridorEntryPos = Offset(0.875f, 0.655f),
+                corridorLaneY = 0.625f,
+                diningSeatPos = Offset(0.31f, 0.54f), loungeSeatPos = Offset(0.94f, 0.55f)
             )
         )
     }
 
-    var ticketCounter by remember { mutableIntStateOf(410) }
+    val loadedOffice = remember { LocalCache.loadOfficeState(context) }
+
+    var ticketCounter by remember { mutableIntStateOf(loadedOffice?.ticketCounter ?: 410) }
     var selectedAgentId by remember { mutableIntStateOf(7) }
 
     var isChiefHistoryExpanded by remember { mutableStateOf(false) }
+    var isDeputyHistoryExpanded by remember { mutableStateOf(false) }
     var isAgentHistoryExpanded by remember { mutableStateOf(false) }
 
     val chiefAuditLog = remember {
-        mutableStateListOf(
-            ChiefAuditEntry(
-                id = "aud_1",
-                ticketNumber = 409,
-                agentName = "Вика",
-                taskTitle = "Обзор Xiaomi 17T (6.83\" AMOLED, Dimensity 8500-Ultra, 6500 мАч)",
-                verdict = "Подтверждено: ТТХ точные, дублей нет • Премия +2 500 ₽",
-                salaryDelta = 2500,
-                hasReprimand = false,
-                isApproved = true,
-                checkedAt = ZonedDateTime.now().minusMinutes(1).format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-            ),
-            ChiefAuditEntry(
-                id = "aud_2",
-                ticketNumber = 408,
-                agentName = "Макс",
-                taskTitle = "Повторная статья «Xiaomi 17T — Ревизия #2»",
-                verdict = "Отклонено: дубль уже выпущенной модели запрещён • 0 ₽",
-                salaryDelta = 0,
-                hasReprimand = false,
-                isApproved = false,
-                checkedAt = ZonedDateTime.now().minusMinutes(3).format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-            ),
-            ChiefAuditEntry(
-                id = "aud_3",
-                ticketNumber = 407,
-                agentName = "Артур",
-                taskTitle = "Обзор Huawei Watch Fit 5 (1.82\" AMOLED, 5 ATM, до 10 дней)",
-                verdict = "Подтверждено: характеристики проверены • Премия +2 000 ₽",
-                salaryDelta = 2000,
-                hasReprimand = false,
-                isApproved = true,
-                checkedAt = ZonedDateTime.now().minusMinutes(5).format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-            ),
-            ChiefAuditEntry(
-                id = "aud_4",
-                ticketNumber = 406,
-                agentName = "Нова",
-                taskTitle = "Черновик ноутбука с ошибкой в типе процессора и портов",
-                verdict = "Отклонено за неточность ТТХ (2-е нарушение) • Выговор и депремирование -2 000 ₽",
-                salaryDelta = -2000,
-                hasReprimand = true,
-                isApproved = false,
-                checkedAt = ZonedDateTime.now().minusMinutes(8).format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-            )
-        )
+        mutableStateListOf<ChiefAuditEntry>().apply {
+            if (loadedOffice != null && loadedOffice.chiefAuditLog.isNotEmpty()) {
+                addAll(loadedOffice.chiefAuditLog)
+            } else {
+                add(
+                    ChiefAuditEntry(
+                        id = "aud_1",
+                        ticketNumber = 409,
+                        agentName = "Вика",
+                        taskTitle = "Обзор Xiaomi 17T (6.83\" AMOLED, Dimensity 8500-Ultra, 6500 мАч)",
+                        verdict = "Подтверждено: ТТХ точные, дублей нет • Премия +2 500 ₽",
+                        salaryDelta = 2500,
+                        hasReprimand = false,
+                        isApproved = true,
+                        checkedAt = ZonedDateTime.now().minusMinutes(1).format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                    )
+                )
+                add(
+                    ChiefAuditEntry(
+                        id = "aud_2",
+                        ticketNumber = 408,
+                        agentName = "Макс",
+                        taskTitle = "Повторная статья «Xiaomi 17T — Ревизия #2»",
+                        verdict = "Отклонено: дубль уже выпущенной модели запрещён • 0 ₽",
+                        salaryDelta = 0,
+                        hasReprimand = false,
+                        isApproved = false,
+                        checkedAt = ZonedDateTime.now().minusMinutes(3).format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                    )
+                )
+            }
+        }
+    }
+
+    val deputyEditLog = remember {
+        mutableStateListOf<DeputyEditEntry>().apply {
+            if (loadedOffice != null && loadedOffice.deputyEditLog.isNotEmpty()) {
+                addAll(loadedOffice.deputyEditLog)
+            } else {
+                add(
+                    DeputyEditEntry(
+                        id = "dep_init_1",
+                        deviceName = "Xiaomi 17T",
+                        fixedField = "Защита и интерфейсы",
+                        correctionDetail = "Уточнены интерфейсы Wi-Fi 7, Bluetooth 6.0 и USB 2.0 без дублирования статьи",
+                        editedAt = ZonedDateTime.now().minusMinutes(2).format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+                    )
+                )
+            }
+        }
     }
 
     val agentStatuses = remember {
         mutableStateMapOf<Int, AgentLiveStatus>().apply {
+            val savedMap = loadedOffice?.agentStatuses
             agents.forEachIndexed { idx, ag ->
-                val startSalary = when (ag.id) {
-                    7 -> 18500
-                    3 -> 17000
-                    6 -> 12000 // У Новы был выговор и депремирование
-                    else -> 15000 + (idx * 500)
-                }
-                val startRejects = if (ag.id == 6) 2 else if (ag.id == 1) 1 else 0
-                val startReprimands = if (ag.id == 6) 1 else 0
+                val savedSt = savedMap?.get(ag.id)
+                if (savedSt != null) {
+                    put(ag.id, savedSt)
+                } else {
+                    val startSalary = when (ag.id) {
+                        7 -> 18500
+                        3 -> 17000
+                        6 -> 12000
+                        else -> 15000 + (idx * 500)
+                    }
+                    val startRejects = if (ag.id == 6) 2 else if (ag.id == 1) 1 else 0
+                    val startReprimands = if (ag.id == 6) 1 else 0
 
-                val pastTask1 = createSoloAgentTask(
-                    ticketNumber = 380 + idx,
-                    agentId = ag.id,
-                    newsList = newsList
-                ).copy(
-                    completedAt = ZonedDateTime.now().minusMinutes(4).format(DateTimeFormatter.ofPattern("HH:mm:ss")),
-                    chiefApproved = true,
-                    salaryDelta = 2000
-                )
-                val pastTask2 = createSoloAgentTask(
-                    ticketNumber = 370 + idx,
-                    agentId = ag.id,
-                    newsList = newsList
-                ).copy(
-                    completedAt = ZonedDateTime.now().minusMinutes(9).format(DateTimeFormatter.ofPattern("HH:mm:ss")),
-                    chiefApproved = (ag.id != 6 && ag.id != 1),
-                    salaryDelta = if (ag.id == 6) -2000 else if (ag.id == 1) 0 else 1500,
-                    rejectReason = if (ag.id == 6) "Ошибка в ТТХ • Выговор и штраф -2 000 ₽" else if (ag.id == 1) "Повторная статья отклонена (0 ₽)" else ""
-                )
-
-                val activeTask = createSoloAgentTask(
-                    ticketNumber = 400 + idx,
-                    agentId = ag.id,
-                    newsList = newsList
-                )
-                val startZone = if (idx == 5) AgentLocationZone.DINING else AgentLocationZone.DESK
-                put(
-                    ag.id,
-                    AgentLiveStatus(
-                        currentTask = activeTask,
-                        progress = 0.25f + (idx * 0.08f),
-                        targetZone = startZone,
-                        breakSecondsRemaining = if (startZone != AgentLocationZone.DESK) 85f else 0f,
-                        salaryBalance = startSalary,
-                        rejectionsCount = startRejects,
-                        reprimandsCount = startReprimands,
-                        completedHistory = listOf(pastTask1, pastTask2)
+                    val pastTask1 = createSoloAgentTask(
+                        ticketNumber = 380 + idx,
+                        agentId = ag.id,
+                        newsList = newsList
+                    ).copy(
+                        completedAt = ZonedDateTime.now().minusMinutes(4).format(DateTimeFormatter.ofPattern("HH:mm:ss")),
+                        chiefApproved = true,
+                        salaryDelta = 2000
                     )
-                )
+                    val activeTask = createSoloAgentTask(
+                        ticketNumber = 400 + idx,
+                        agentId = ag.id,
+                        newsList = newsList
+                    )
+                    val startZone = if (idx == 5) AgentLocationZone.DINING else AgentLocationZone.DESK
+                    put(
+                        ag.id,
+                        AgentLiveStatus(
+                            currentTask = activeTask,
+                            progress = 0.25f + (idx * 0.08f),
+                            targetZone = startZone,
+                            breakSecondsRemaining = if (startZone != AgentLocationZone.DESK) 85f else 0f,
+                            salaryBalance = startSalary,
+                            rejectionsCount = startRejects,
+                            reprimandsCount = startReprimands,
+                            completedHistory = listOf(pastTask1)
+                        )
+                    )
+                }
             }
         }
     }
@@ -3256,7 +3981,7 @@ fun AiOfficeLiveDialog(
                     ag.id,
                     when (zone) {
                         AgentLocationZone.DESK -> ag.deskChairPos
-                        AgentLocationZone.CHIEF_CHECK -> Offset(0.11f, 0.21f)
+                        AgentLocationZone.CHIEF_CHECK -> Offset(0.095f, 0.25f)
                         AgentLocationZone.DINING -> ag.diningSeatPos
                         AgentLocationZone.LOUNGE -> ag.loungeSeatPos
                     }
@@ -3277,15 +4002,68 @@ fun AiOfficeLiveDialog(
         }
     }
 
+    // Сохраняем состояние ИИ-Дома при закрытии окна и каждые несколько секунд в фоне
+    DisposableEffect(Unit) {
+        onDispose {
+            LocalCache.saveOfficeState(
+                context = context,
+                ticketCounter = ticketCounter,
+                agentStatuses = agentStatuses.toMap(),
+                chiefAuditLog = chiefAuditLog.toList(),
+                deputyEditLog = deputyEditLog.toList()
+            )
+        }
+    }
+
     LaunchedEffect(isScanning, newsList.size) {
         var lastNanos = System.nanoTime()
+        var deputyAuditTimerSec = 10f
+        var autoPersistTimerSec = 4f
+
         while (true) {
             delay(16L)
             val nowNanos = System.nanoTime()
             val dtSec = ((nowNanos - lastNanos) / 1_000_000_000f).coerceIn(0.005f, 0.05f)
             lastNanos = nowNanos
 
-            val workDurationSec = if (isScanning) 45f else 90f
+            // Фоновое сохранение состояния офиса на диск каждые 4 секунды
+            autoPersistTimerSec -= dtSec
+            if (autoPersistTimerSec <= 0f) {
+                autoPersistTimerSec = 4f
+                LocalCache.saveOfficeState(
+                    context = context,
+                    ticketCounter = ticketCounter,
+                    agentStatuses = agentStatuses.toMap(),
+                    chiefAuditLog = chiefAuditLog.toList(),
+                    deputyEditLog = deputyEditLog.toList()
+                )
+            }
+
+            // Работа Замруководителя Виктора: регулярная сверка ТТХ уже опубликованных статей и их «тихое» редактирование без дублей!
+            deputyAuditTimerSec -= dtSec
+            if (deputyAuditTimerSec <= 0f) {
+                deputyAuditTimerSec = if (isScanning) 14f else 24f
+                val (updatedArticles, editEntry) = ReviewCatalogFactory.deputyVerifyAndFixArticle(
+                    articles = currentReviewsState,
+                    newsList = newsList
+                )
+                if (editEntry != null) {
+                    onReviewsSilentEdited(updatedArticles)
+                    deputyEditLog.add(0, editEntry)
+                    if (deputyEditLog.size > 20) {
+                        deputyEditLog.removeAt(deputyEditLog.lastIndex)
+                    }
+                    LocalCache.saveOfficeState(
+                        context = context,
+                        ticketCounter = ticketCounter,
+                        agentStatuses = agentStatuses.toMap(),
+                        chiefAuditLog = chiefAuditLog.toList(),
+                        deputyEditLog = deputyEditLog.toList()
+                    )
+                }
+            }
+
+            val workDurationSec = if (isScanning) 42f else 85f
             val progressStep = dtSec / workDurationSec
             val walkStep = 0.16f * dtSec
 
@@ -3324,7 +4102,6 @@ fun AiOfficeLiveDialog(
                             agentStatuses[ag.id] = status.copy(breakSecondsRemaining = remSec)
                         } else {
                             val nowTime = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-                            // Строгий фактчекинг ТТХ и проверка дублей у Авроры:
                             val isRejectedByChief = (status.currentTask.ticketNumber % 5 == 0)
 
                             var updatedSalary = status.salaryBalance
@@ -3337,7 +4114,6 @@ fun AiOfficeLiveDialog(
                             if (isRejectedByChief) {
                                 updatedRejections += 1
                                 if (updatedRejections >= 2 && updatedRejections % 2 == 0) {
-                                    // Депремирование и официальный выговор за систематические ошибки в ТТХ или дубли
                                     deltaSalary = -2000
                                     updatedSalary = (updatedSalary - 2000).coerceAtLeast(0)
                                     updatedReprimands += 1
@@ -3364,7 +4140,6 @@ fun AiOfficeLiveDialog(
                                     )
                                 )
                             } else {
-                                // Аврора сама определяет размер премии за качественный материал с точными ТТХ
                                 val bonusOptions = listOf(1500, 2000, 2500, 3000)
                                 deltaSalary = bonusOptions[(status.currentTask.ticketNumber + ag.id) % bonusOptions.size]
                                 updatedSalary += deltaSalary
@@ -3386,16 +4161,14 @@ fun AiOfficeLiveDialog(
                                     )
                                 )
 
-                                // Выпускаем обзор ТОЛЬКО если это абсолютно уникальное устройство (без ревизий!)
-                                if (ag.id == 3 || ag.id == 7) {
-                                    val existingNames = existingReviews.map { it.deviceName.trim().lowercase() }.toSet()
-                                    val uniqueReview = ReviewCatalogFactory.generateUniqueNextArticle(existingNames)
-                                    if (uniqueReview != null) {
-                                        onNewReviewApproved(uniqueReview)
-                                    }
+                                // Выпуск нового уникального обзора (без лимита в 12 статей и без дублей!)
+                                if (ag.id in listOf(3, 4, 5, 6, 7)) {
+                                    val existingNames = currentReviewsState.map { it.deviceName.trim().lowercase() }.toSet()
+                                    val uniqueReview = ReviewCatalogFactory.generateUniqueNextArticle(existingNames, newsList)
+                                    onNewReviewApproved(uniqueReview)
                                 }
                             }
-                            if (chiefAuditLog.size > 18) {
+                            if (chiefAuditLog.size > 24) {
                                 chiefAuditLog.removeAt(chiefAuditLog.lastIndex)
                             }
 
@@ -3421,7 +4194,7 @@ fun AiOfficeLiveDialog(
                                     salaryBalance = updatedSalary,
                                     rejectionsCount = updatedRejections,
                                     reprimandsCount = updatedReprimands,
-                                    completedHistory = (listOf(finishedTask) + status.completedHistory).take(10)
+                                    completedHistory = (listOf(finishedTask) + status.completedHistory).take(12)
                                 )
                                 agentPathQueues[ag.id] = buildCleanPath(curPos, ag, chosenZone)
                             } else {
@@ -3439,10 +4212,18 @@ fun AiOfficeLiveDialog(
                                     salaryBalance = updatedSalary,
                                     rejectionsCount = updatedRejections,
                                     reprimandsCount = updatedReprimands,
-                                    completedHistory = (listOf(finishedTask) + status.completedHistory).take(10)
+                                    completedHistory = (listOf(finishedTask) + status.completedHistory).take(12)
                                 )
                                 agentPathQueues[ag.id] = buildCleanPath(curPos, ag, AgentLocationZone.DESK)
                             }
+
+                            LocalCache.saveOfficeState(
+                                context = context,
+                                ticketCounter = ticketCounter,
+                                agentStatuses = agentStatuses.toMap(),
+                                chiefAuditLog = chiefAuditLog.toList(),
+                                deputyEditLog = deputyEditLog.toList()
+                            )
                         }
                     }
                     AgentLocationZone.DINING, AgentLocationZone.LOUNGE -> {
@@ -3525,6 +4306,15 @@ fun AiOfficeLiveDialog(
         ),
         label = "newYearLights"
     )
+    val snowFallPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 6500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "snowFall"
+    )
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -3559,7 +4349,7 @@ fun AiOfficeLiveDialog(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            "Ёлка, гирлянды, фактчекинг ТТХ, премии и выговоры от Авроры",
+                            "Директор Аврора, зам. Виктор, автосохранение и живой снег",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                             maxLines = 1,
@@ -3571,7 +4361,7 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Карточка Директора Авроры со скрываемым журналом проверок ТТХ, премий и выговоров
+                // 1. Карточка Директора Авроры
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = Color(0xFFFBBF24).copy(alpha = 0.10f),
@@ -3600,7 +4390,7 @@ fun AiOfficeLiveDialog(
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    text = "Директор Аврора (Фактчекинг и премии)",
+                                    text = "Директор Аврора (Приёмка и премии)",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFFFBBF24),
@@ -3634,12 +4424,6 @@ fun AiOfficeLiveDialog(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 HorizontalDivider(color = Color(0xFFFBBF24).copy(alpha = 0.25f))
-                                Text(
-                                    text = "Журнал решений Авроры (${chiefAuditLog.size}):",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
                                 chiefAuditLog.forEach { log ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -3672,11 +4456,127 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Новогодний план ИИ-Дома: кабинет Авроры, 8 кабинетов, столовая, комната отдыха и большая ёлка в центре!
+                // 2. Карточка Замруководителя Виктора (сверка ТТХ и редактирование опубликованных статей БЕЗ дублей!)
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFF38BDF8).copy(alpha = 0.10f),
+                    border = BorderStroke(1.dp, Color(0xFF38BDF8).copy(alpha = 0.45f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isDeputyHistoryExpanded = !isDeputyHistoryExpanded },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f).padding(end = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.EditNote,
+                                    contentDescription = null,
+                                    tint = Color(0xFF38BDF8),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "Зам. директора Виктор (Редактура ТТХ без дублей)",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF38BDF8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Правок: ${deputyEditLog.size}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = if (isDeputyHistoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Журнал правок Виктора",
+                                    tint = Color(0xFF38BDF8),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(visible = isDeputyHistoryExpanded) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                HorizontalDivider(color = Color(0xFF38BDF8).copy(alpha = 0.25f))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Журнал тихих правок ТТХ в опубликованных статьях:",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            val (updatedList, entry) = ReviewCatalogFactory.deputyVerifyAndFixArticle(
+                                                articles = currentReviewsState,
+                                                newsList = newsList
+                                            )
+                                            if (entry != null) {
+                                                onReviewsSilentEdited(updatedList)
+                                                deputyEditLog.add(0, entry)
+                                                Toast.makeText(
+                                                    context,
+                                                    "Виктор обновил ТТХ для ${entry.deviceName} (без дубля)",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Проверить сейчас", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
+                                    }
+                                }
+                                deputyEditLog.forEach { dep ->
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Text(
+                                            text = "[${dep.editedAt}] ${dep.deviceName} • ${dep.fixedField}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = dep.correctionDetail,
+                                            fontSize = 10.sp,
+                                            color = Color(0xFF38BDF8)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Просторный план ИИ-Дома: расширенная зона кабинетов, компактные столовая и лаунж, современная ёлка и живой снег!
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(435.dp)
+                        .height(455.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(Color(0xFF0F172A))
                         .border(1.4.dp, Color(0xFF10B981).copy(alpha = 0.55f), RoundedCornerShape(18.dp))
@@ -3684,8 +4584,12 @@ fun AiOfficeLiveDialog(
                             detectTapGestures { tap ->
                                 val w = size.width.toFloat()
                                 val h = size.height.toFloat()
-                                if (tap.x < w * 0.20f && tap.y < h * 0.27f) {
+                                if (tap.x < w * 0.165f && tap.y < h * 0.32f) {
                                     isChiefHistoryExpanded = !isChiefHistoryExpanded
+                                    return@detectTapGestures
+                                }
+                                if (tap.x in (w * 0.165f)..(w * 0.33f) && tap.y < h * 0.32f) {
+                                    isDeputyHistoryExpanded = !isDeputyHistoryExpanded
                                     return@detectTapGestures
                                 }
                                 val tapped = agents.minByOrNull { ag ->
@@ -3706,50 +4610,36 @@ fun AiOfficeLiveDialog(
 
                         drawRect(color = Color(0xFF182032), size = size)
 
-                        val topRoomsBottom = h * 0.27f
-                        val centerRoomsTop = h * 0.36f
-                        val centerRoomsBottom = h * 0.64f
-                        val botRoomsTop = h * 0.73f
+                        // Расширенная зона кабинетов: сверху до 32%, снизу с 68%
+                        val topRoomsBottom = h * 0.32f
+                        val centerRoomsTop = h * 0.39f
+                        val centerRoomsBottom = h * 0.61f
+                        val botRoomsTop = h * 0.68f
 
-                        // Коридоры
+                        // Коридоры и центральный холл
                         drawRect(
                             color = Color(0xFF111827),
                             topLeft = Offset(0f, topRoomsBottom),
                             size = Size(w, botRoomsTop - topRoomsBottom)
                         )
 
-                        // Новогодние снежинки в коридорах
-                        val snowCoords = listOf(
-                            Offset(0.05f, 0.32f), Offset(0.18f, 0.33f), Offset(0.49f, 0.31f),
-                            Offset(0.84f, 0.32f), Offset(0.95f, 0.34f), Offset(0.08f, 0.68f),
-                            Offset(0.49f, 0.69f), Offset(0.76f, 0.68f), Offset(0.93f, 0.69f)
-                        )
-                        snowCoords.forEachIndexed { idx, sc ->
-                            val alphaSnow = if (idx % 2 == 0) 0.35f + 0.35f * garlandBlink else 0.70f - 0.35f * garlandBlink
-                            drawCircle(
-                                color = Color.White.copy(alpha = alphaSnow),
-                                radius = 1.6.dp.toPx(),
-                                center = Offset(w * sc.x, h * sc.y)
-                            )
-                        }
-
                         val wallColor = Color(0xFF475569)
-                        val wallThickness = 2.4.dp.toPx()
+                        val wallThickness = 2.2.dp.toPx()
+                        val doorHalf = 11.dp.toPx()
 
-                        // 1. Отдельный кабинет Директора Авроры (x: 0.00..0.20, y: 0.00..0.27)
-                        val chiefRoomW = w * 0.20f
+                        // 1. Кабинет Директора Авроры (x: 0.00..0.165, y: 0.00..0.32)
+                        val chiefW = w * 0.165f
                         drawRect(
-                            color = Color(0xFFFBBF24).copy(alpha = 0.14f),
+                            color = Color(0xFFFBBF24).copy(alpha = 0.13f),
                             topLeft = Offset(2.dp.toPx(), 2.dp.toPx()),
-                            size = Size(chiefRoomW - 4.dp.toPx(), topRoomsBottom - 4.dp.toPx())
+                            size = Size(chiefW - 3.dp.toPx(), topRoomsBottom - 4.dp.toPx())
                         )
-                        drawLine(Color(0xFFFBBF24), Offset(chiefRoomW, 0f), Offset(chiefRoomW, topRoomsBottom), wallThickness)
-                        val chiefDoorX = chiefRoomW * 0.5f
-                        val doorHalf = 13.dp.toPx()
+                        drawLine(Color(0xFFFBBF24), Offset(chiefW, 0f), Offset(chiefW, topRoomsBottom), wallThickness)
+                        val chiefDoorX = chiefW * 0.5f
                         drawLine(Color(0xFFFBBF24), Offset(0f, topRoomsBottom), Offset(chiefDoorX - doorHalf, topRoomsBottom), wallThickness)
-                        drawLine(Color(0xFFFBBF24), Offset(chiefDoorX + doorHalf, topRoomsBottom), Offset(chiefRoomW, topRoomsBottom), wallThickness)
+                        drawLine(Color(0xFFFBBF24), Offset(chiefDoorX + doorHalf, topRoomsBottom), Offset(chiefW, topRoomsBottom), wallThickness)
 
-                        val avrChair = Offset(w * 0.08f, h * 0.155f)
+                        val avrChair = Offset(w * 0.082f, h * 0.19f)
                         drawDetailedWorkstation(
                             chairAnchor = avrChair,
                             isTopRow = true,
@@ -3770,35 +4660,70 @@ fun AiOfficeLiveDialog(
                             isSelected = false
                         )
 
-                        // 2. 4 кабинета агентов справа от кабинета Авроры
-                        val topAgentRoomW = (w * 0.80f) / 4f
+                        // 2. Кабинет Замруководителя Виктора (x: 0.165..0.33, y: 0.00..0.32)
+                        val deputyLeft = chiefW
+                        val deputyRight = w * 0.33f
+                        val deputyW = deputyRight - deputyLeft
+                        drawRect(
+                            color = Color(0xFF38BDF8).copy(alpha = 0.13f),
+                            topLeft = Offset(deputyLeft + 2.dp.toPx(), 2.dp.toPx()),
+                            size = Size(deputyW - 3.dp.toPx(), topRoomsBottom - 4.dp.toPx())
+                        )
+                        drawLine(Color(0xFF38BDF8), Offset(deputyRight, 0f), Offset(deputyRight, topRoomsBottom), wallThickness)
+                        val deputyDoorX = deputyLeft + deputyW * 0.5f
+                        drawLine(Color(0xFF38BDF8), Offset(deputyLeft, topRoomsBottom), Offset(deputyDoorX - doorHalf, topRoomsBottom), wallThickness)
+                        drawLine(Color(0xFF38BDF8), Offset(deputyDoorX + doorHalf, topRoomsBottom), Offset(deputyRight, topRoomsBottom), wallThickness)
+
+                        val vicChair = Offset(w * 0.247f, h * 0.19f)
+                        drawDetailedWorkstation(
+                            chairAnchor = vicChair,
+                            isTopRow = true,
+                            accentColor = Color(0xFF38BDF8),
+                            isActiveWork = true,
+                            progress = 1.0f,
+                            scanPhase = screenScanPhase
+                        )
+                        drawDetailedHumanAgent(
+                            center = vicChair,
+                            isTopRow = true,
+                            zone = AgentLocationZone.DESK,
+                            isWalking = false,
+                            shirtColor = Color(0xFF38BDF8),
+                            hairColor = Color(0xFF1E293B),
+                            walkPhase = 0f,
+                            typePhase = -typingHands,
+                            isSelected = false
+                        )
+
+                        // 3. 4 просторных кабинета агентов верхнего ряда (x: 0.33..1.00, y: 0.00..0.32)
+                        val topAgentRoomW = (w * 0.67f) / 4f
                         for (col in 0..3) {
-                            val left = chiefRoomW + col * topAgentRoomW
+                            val left = deputyRight + col * topAgentRoomW
                             val right = left + topAgentRoomW
                             val doorCenter = left + topAgentRoomW / 2f
                             val ag = agents[col]
                             val isSel = ag.id == selectedAgentId
 
                             drawRect(
-                                color = ag.accentColor.copy(alpha = if (isSel) 0.14f else 0.04f),
+                                color = ag.accentColor.copy(alpha = if (isSel) 0.15f else 0.05f),
                                 topLeft = Offset(left + 2.dp.toPx(), 2.dp.toPx()),
-                                size = Size(topAgentRoomW - 4.dp.toPx(), topRoomsBottom - 4.dp.toPx())
+                                size = Size(topAgentRoomW - 3.dp.toPx(), topRoomsBottom - 4.dp.toPx())
                             )
                             drawLine(wallColor, Offset(right, 0f), Offset(right, topRoomsBottom), wallThickness)
                             drawLine(wallColor, Offset(left, topRoomsBottom), Offset(doorCenter - doorHalf, topRoomsBottom), wallThickness)
                             drawLine(wallColor, Offset(doorCenter + doorHalf, topRoomsBottom), Offset(right, topRoomsBottom), wallThickness)
-                            drawLine(ag.accentColor.copy(alpha = 0.5f), Offset(doorCenter - doorHalf, topRoomsBottom), Offset(doorCenter + doorHalf, topRoomsBottom), 1.4.dp.toPx())
+                            drawLine(ag.accentColor.copy(alpha = 0.55f), Offset(doorCenter - doorHalf, topRoomsBottom), Offset(doorCenter + doorHalf, topRoomsBottom), 1.4.dp.toPx())
                         }
 
-                        // Новогодние гирлянды с разноцветными огонёчками вдоль верхней и нижней стен коридора
+                        // Новогодние гирлянды вдоль коридоров
                         val bulbColors = listOf(
-                            Color(0xFFEF4444), // Красный
-                            Color(0xFFFBBF24), // Золотой
-                            Color(0xFF10B981), // Изумрудный
-                            Color(0xFF38BDF8), // Голубой
-                            Color(0xFFA855F7)  // Фиолетовый
+                            Color(0xFFEF4444),
+                            Color(0xFFFBBF24),
+                            Color(0xFF10B981),
+                            Color(0xFF38BDF8),
+                            Color(0xFFA855F7)
                         )
-                        val bulbCount = 24
+                        val bulbCount = 26
                         for (b in 0..bulbCount) {
                             val bx = w * (b.toFloat() / bulbCount)
                             val c1 = bulbColors[b % bulbColors.size]
@@ -3806,163 +4731,216 @@ fun AiOfficeLiveDialog(
                             val isEven = b % 2 == 0
                             val glowAlpha = if (isEven) 0.45f + 0.55f * garlandBlink else 1.0f - 0.55f * garlandBlink
 
-                            // Верхняя гирлянда
-                            drawCircle(c1.copy(alpha = glowAlpha * 0.35f), 4.5.dp.toPx(), Offset(bx, topRoomsBottom + 2.dp.toPx()))
-                            drawCircle(c1.copy(alpha = glowAlpha), 2.1.dp.toPx(), Offset(bx, topRoomsBottom + 2.dp.toPx()))
+                            drawCircle(c1.copy(alpha = glowAlpha * 0.35f), 4.2.dp.toPx(), Offset(bx, topRoomsBottom + 2.dp.toPx()))
+                            drawCircle(c1.copy(alpha = glowAlpha), 2.0.dp.toPx(), Offset(bx, topRoomsBottom + 2.dp.toPx()))
 
-                            // Нижняя гирлянда
-                            drawCircle(c2.copy(alpha = glowAlpha * 0.35f), 4.5.dp.toPx(), Offset(bx, botRoomsTop - 2.dp.toPx()))
-                            drawCircle(c2.copy(alpha = glowAlpha), 2.1.dp.toPx(), Offset(bx, botRoomsTop - 2.dp.toPx()))
+                            drawCircle(c2.copy(alpha = glowAlpha * 0.35f), 4.2.dp.toPx(), Offset(bx, botRoomsTop - 2.dp.toPx()))
+                            drawCircle(c2.copy(alpha = glowAlpha), 2.0.dp.toPx(), Offset(bx, botRoomsTop - 2.dp.toPx()))
                         }
 
-                        // 3. Просторная Столовая слева (x: 0.03..0.44, y: 0.36..0.64)
+                        // 4. Компактная Столовая слева (x: 0.03..0.34, y: 0.39..0.61)
                         val diningRect = Offset(w * 0.03f, centerRoomsTop)
-                        val diningSize = Size(w * 0.41f, centerRoomsBottom - centerRoomsTop)
+                        val diningSize = Size(w * 0.31f, centerRoomsBottom - centerRoomsTop)
                         drawRoundRect(
                             color = Color(0xFF451A03).copy(alpha = 0.45f),
                             topLeft = diningRect,
                             size = diningSize,
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                            cornerRadius = CornerRadius(11.dp.toPx(), 11.dp.toPx())
                         )
                         drawRoundRect(
                             color = Color(0xFFF59E0B).copy(alpha = 0.45f),
                             topLeft = diningRect,
                             size = diningSize,
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                            cornerRadius = CornerRadius(11.dp.toPx(), 11.dp.toPx()),
                             style = Stroke(width = 1.2.dp.toPx())
                         )
-                        drawRoundRect(
-                            color = Color(0xFF1E293B),
-                            topLeft = Offset(diningRect.x + 6.dp.toPx(), diningRect.y + 8.dp.toPx()),
-                            size = Size(13.dp.toPx(), diningSize.height - 16.dp.toPx()),
-                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-                        )
-                        val dTableX = diningRect.x + 25.dp.toPx()
-                        val dTableY = diningRect.y + diningSize.height * 0.30f
-                        val dTableW = diningSize.width - 33.dp.toPx()
-                        val dTableH = 18.dp.toPx()
+                        val dTableX = diningRect.x + 12.dp.toPx()
+                        val dTableY = diningRect.y + diningSize.height * 0.32f
+                        val dTableW = diningSize.width - 24.dp.toPx()
+                        val dTableH = 14.dp.toPx()
                         drawRoundRect(
                             color = Color(0xFF92400E),
                             topLeft = Offset(dTableX, dTableY),
                             size = Size(dTableW, dTableH),
-                            cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                            cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
                         )
-                        for (p in 1..4) {
-                            drawCircle(
-                                color = Color.White.copy(alpha = 0.85f),
-                                radius = 2.8.dp.toPx(),
-                                center = Offset(dTableX + dTableW * (p / 5f), dTableY + dTableH * 0.5f)
-                            )
-                        }
 
-                        // 4. Нарядная НОВОГОДНЯЯ ЁЛКА с подарками и звездой по центру холла (x: 0.50, y: 0.50)
+                        // 5. СОВРЕМЕННАЯ ДИЗАЙНЕРСКАЯ ЁЛКА С ИГОЛОЧКАМИ в свободном центре холла (x: 0.50, y: 0.50)
                         val treeX = w * 0.50f
-                        val treeTopY = centerRoomsTop + 8.dp.toPx()
-                        val treeBottomY = centerRoomsBottom - 16.dp.toPx()
+                        val treeTopY = centerRoomsTop - 4.dp.toPx()
+                        val treeBottomY = centerRoomsBottom - 8.dp.toPx()
                         val treeHeight = treeBottomY - treeTopY
+
+                        // Мягкое северное сияние под ёлкой
+                        drawCircle(
+                            color = Color(0xFF10B981).copy(alpha = 0.14f),
+                            radius = 36.dp.toPx(),
+                            center = Offset(treeX, treeTopY + treeHeight * 0.55f)
+                        )
 
                         // Ствол
                         drawRoundRect(
                             color = Color(0xFF78350F),
-                            topLeft = Offset(treeX - 3.5.dp.toPx(), treeBottomY - 2.dp.toPx()),
-                            size = Size(7.dp.toPx(), 9.dp.toPx()),
+                            topLeft = Offset(treeX - 3.dp.toPx(), treeBottomY - 2.dp.toPx()),
+                            size = Size(6.dp.toPx(), 8.dp.toPx()),
                             cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
                         )
 
-                        // 3 пушистых яруса хвои
-                        for (tier in 0..2) {
-                            val tierTop = treeTopY + tier * (treeHeight * 0.25f)
-                            val tierBot = tierTop + treeHeight * 0.45f
-                            val halfWidth = (10 + tier * 6).dp.toPx()
+                        // 4 современных яруса хвои с прорисованными иголочками и ветвями!
+                        for (tier in 0..3) {
+                            val tierTop = treeTopY + tier * (treeHeight * 0.21f)
+                            val tierBot = tierTop + treeHeight * 0.36f
+                            val halfWidth = (9 + tier * 5.5f).dp.toPx()
                             val path = Path().apply {
                                 moveTo(treeX, tierTop)
                                 lineTo(treeX - halfWidth, tierBot)
+                                lineTo(treeX, tierBot - 3.dp.toPx())
                                 lineTo(treeX + halfWidth, tierBot)
                                 close()
                             }
-                            drawPath(path, color = Color(0xFF059669))
-                            drawPath(path, color = Color(0xFF34D399), style = Stroke(width = 1.dp.toPx()))
+                            drawPath(
+                                path = path,
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(Color(0xFF34D399), Color(0xFF047857)),
+                                    startY = tierTop,
+                                    endY = tierBot
+                                )
+                            )
+                            drawPath(path, color = Color(0xFF6EE7B7).copy(alpha = 0.7f), style = Stroke(width = 0.9.dp.toPx()))
+
+                            // Прорисовка хвойных иголочек по краям ветвей
+                            val needlesCount = 6 + tier * 2
+                            for (n in 1..needlesCount) {
+                                val frac = n.toFloat() / (needlesCount + 1)
+                                val lx = treeX - halfWidth * frac
+                                val rx = treeX + halfWidth * frac
+                                val ny = tierTop + (tierBot - tierTop) * frac
+                                drawLine(
+                                    color = Color(0xFFA7F3D0).copy(alpha = 0.85f),
+                                    start = Offset(lx, ny),
+                                    end = Offset(lx - 2.6.dp.toPx(), ny + 1.8.dp.toPx()),
+                                    strokeWidth = 0.9.dp.toPx(),
+                                    cap = StrokeCap.Round
+                                )
+                                drawLine(
+                                    color = Color(0xFFA7F3D0).copy(alpha = 0.85f),
+                                    start = Offset(rx, ny),
+                                    end = Offset(rx + 2.6.dp.toPx(), ny + 1.8.dp.toPx()),
+                                    strokeWidth = 0.9.dp.toPx(),
+                                    cap = StrokeCap.Round
+                                )
+                            }
                         }
 
-                        // Золотая звезда на макушке
-                        drawCircle(
-                            color = Color(0xFFFBBF24).copy(alpha = 0.4f + 0.4f * garlandBlink),
-                            radius = 6.5.dp.toPx(),
-                            center = Offset(treeX, treeTopY - 1.dp.toPx())
+                        // Спиральная неоновая гирлянда вокруг ёлки
+                        drawLine(
+                            color = Color(0xFFFDE047).copy(alpha = 0.75f),
+                            start = Offset(treeX - 5.dp.toPx(), treeTopY + treeHeight * 0.25f),
+                            end = Offset(treeX + 8.dp.toPx(), treeTopY + treeHeight * 0.36f),
+                            strokeWidth = 1.2.dp.toPx(),
+                            cap = StrokeCap.Round
                         )
-                        drawCircle(
-                            color = Color(0xFFFDE047),
-                            radius = 3.2.dp.toPx(),
-                            center = Offset(treeX, treeTopY - 1.dp.toPx())
+                        drawLine(
+                            color = Color(0xFF38BDF8).copy(alpha = 0.75f),
+                            start = Offset(treeX + 10.dp.toPx(), treeTopY + treeHeight * 0.52f),
+                            end = Offset(treeX - 13.dp.toPx(), treeTopY + treeHeight * 0.66f),
+                            strokeWidth = 1.2.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                        drawLine(
+                            color = Color(0xFFF43F5E).copy(alpha = 0.75f),
+                            start = Offset(treeX - 14.dp.toPx(), treeTopY + treeHeight * 0.78f),
+                            end = Offset(treeX + 17.dp.toPx(), treeTopY + treeHeight * 0.90f),
+                            strokeWidth = 1.2.dp.toPx(),
+                            cap = StrokeCap.Round
                         )
 
-                        // Разноцветные ёлочные шары и огонёчки на ёлке
+                        // Современная светящаяся звезда на макушке
+                        drawCircle(
+                            color = Color(0xFFFBBF24).copy(alpha = 0.45f + 0.45f * garlandBlink),
+                            radius = 7.dp.toPx(),
+                            center = Offset(treeX, treeTopY - 2.dp.toPx())
+                        )
+                        drawLine(
+                            color = Color(0xFFFEF08A),
+                            start = Offset(treeX, treeTopY - 7.dp.toPx()),
+                            end = Offset(treeX, treeTopY + 3.dp.toPx()),
+                            strokeWidth = 1.6.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                        drawLine(
+                            color = Color(0xFFFEF08A),
+                            start = Offset(treeX - 5.dp.toPx(), treeTopY - 2.dp.toPx()),
+                            end = Offset(treeX + 5.dp.toPx(), treeTopY - 2.dp.toPx()),
+                            strokeWidth = 1.6.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+
+                        // Яркие новогодние шары и подарки под ёлкой
                         val ornaments = listOf(
-                            Triple(treeX - 4.dp.toPx(), treeTopY + treeHeight * 0.30f, Color(0xFFEF4444)),
+                            Triple(treeX - 4.dp.toPx(), treeTopY + treeHeight * 0.28f, Color(0xFFEF4444)),
                             Triple(treeX + 5.dp.toPx(), treeTopY + treeHeight * 0.38f, Color(0xFFFBBF24)),
-                            Triple(treeX - 7.dp.toPx(), treeTopY + treeHeight * 0.58f, Color(0xFF38BDF8)),
-                            Triple(treeX + 2.dp.toPx(), treeTopY + treeHeight * 0.64f, Color(0xFFF43F5E)),
-                            Triple(treeX + 9.dp.toPx(), treeTopY + treeHeight * 0.80f, Color(0xFFFBBF24)),
-                            Triple(treeX - 10.dp.toPx(), treeTopY + treeHeight * 0.84f, Color(0xFFA855F7))
+                            Triple(treeX - 8.dp.toPx(), treeTopY + treeHeight * 0.55f, Color(0xFF38BDF8)),
+                            Triple(treeX + 3.dp.toPx(), treeTopY + treeHeight * 0.62f, Color(0xFFF43F5E)),
+                            Triple(treeX + 11.dp.toPx(), treeTopY + treeHeight * 0.78f, Color(0xFFFBBF24)),
+                            Triple(treeX - 12.dp.toPx(), treeTopY + treeHeight * 0.84f, Color(0xFFA855F7))
                         )
                         ornaments.forEachIndexed { idx, (ox, oy, oColor) ->
                             val blink = if (idx % 2 == 0) 0.5f + 0.5f * garlandBlink else 1.0f - 0.5f * garlandBlink
                             drawCircle(oColor.copy(alpha = blink), 2.3.dp.toPx(), Offset(ox, oy))
                         }
-
-                        // Коробки с новогодними подарками под ёлкой
                         drawRoundRect(
                             color = Color(0xFFEF4444),
-                            topLeft = Offset(treeX - 13.dp.toPx(), treeBottomY + 2.dp.toPx()),
-                            size = Size(8.dp.toPx(), 7.dp.toPx()),
+                            topLeft = Offset(treeX - 14.dp.toPx(), treeBottomY + 1.dp.toPx()),
+                            size = Size(8.dp.toPx(), 6.dp.toPx()),
                             cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
                         )
                         drawRoundRect(
                             color = Color(0xFF38BDF8),
-                            topLeft = Offset(treeX + 5.dp.toPx(), treeBottomY + 2.dp.toPx()),
-                            size = Size(8.dp.toPx(), 7.dp.toPx()),
+                            topLeft = Offset(treeX + 6.dp.toPx(), treeBottomY + 1.dp.toPx()),
+                            size = Size(8.dp.toPx(), 6.dp.toPx()),
                             cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
                         )
 
-                        // 5. Просторная Комната отдыха с ТВ справа (x: 0.56..0.97, y: 0.36..0.64)
-                        val loungeRect = Offset(w * 0.56f, centerRoomsTop)
-                        val loungeSize = Size(w * 0.41f, centerRoomsBottom - centerRoomsTop)
+                        // 6. Компактная Комната отдыха справа (x: 0.66..0.97, y: 0.39..0.61)
+                        val loungeRect = Offset(w * 0.66f, centerRoomsTop)
+                        val loungeSize = Size(w * 0.31f, centerRoomsBottom - centerRoomsTop)
                         drawRoundRect(
                             color = Color(0xFF1E1B4B).copy(alpha = 0.48f),
                             topLeft = loungeRect,
                             size = loungeSize,
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                            cornerRadius = CornerRadius(11.dp.toPx(), 11.dp.toPx())
                         )
                         drawRoundRect(
                             color = Color(0xFF818CF8).copy(alpha = 0.45f),
                             topLeft = loungeRect,
                             size = loungeSize,
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                            cornerRadius = CornerRadius(11.dp.toPx(), 11.dp.toPx()),
                             style = Stroke(width = 1.2.dp.toPx())
                         )
                         val tvLeft = loungeRect.x + loungeSize.width * 0.16f
                         val tvWidth = loungeSize.width * 0.68f
-                        val tvTop = loungeRect.y + 7.dp.toPx()
+                        val tvTop = loungeRect.y + 6.dp.toPx()
                         drawRoundRect(
                             color = Color(0xFF090D16),
                             topLeft = Offset(tvLeft, tvTop),
-                            size = Size(tvWidth, 7.dp.toPx()),
+                            size = Size(tvWidth, 6.dp.toPx()),
                             cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
                         )
                         drawLine(
                             color = Color(0xFF38BDF8),
-                            start = Offset(tvLeft + 3.dp.toPx(), tvTop + 7.dp.toPx()),
-                            end = Offset(tvLeft + tvWidth - 3.dp.toPx(), tvTop + 7.dp.toPx()),
-                            strokeWidth = 2.4.dp.toPx()
+                            start = Offset(tvLeft + 3.dp.toPx(), tvTop + 6.dp.toPx()),
+                            end = Offset(tvLeft + tvWidth - 3.dp.toPx(), tvTop + 6.dp.toPx()),
+                            strokeWidth = 2.2.dp.toPx()
                         )
                         drawRoundRect(
                             color = Color(0xFF4338CA),
-                            topLeft = Offset(loungeRect.x + 12.dp.toPx(), loungeRect.y + loungeSize.height * 0.52f),
-                            size = Size(loungeSize.width - 24.dp.toPx(), 20.dp.toPx()),
-                            cornerRadius = CornerRadius(7.dp.toPx(), 7.dp.toPx())
+                            topLeft = Offset(loungeRect.x + 10.dp.toPx(), loungeRect.y + loungeSize.height * 0.54f),
+                            size = Size(loungeSize.width - 20.dp.toPx(), 16.dp.toPx()),
+                            cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
                         )
 
-                        // 6. 4 кабинета нижнего ряда
+                        // 7. 4 просторных кабинета нижнего ряда (y: 0.68..1.00)
                         val botColWidth = w / 4f
                         for (col in 0..3) {
                             val left = col * botColWidth
@@ -3972,14 +4950,14 @@ fun AiOfficeLiveDialog(
                             val isBotSel = botAgent.id == selectedAgentId
 
                             drawRect(
-                                color = botAgent.accentColor.copy(alpha = if (isBotSel) 0.14f else 0.04f),
+                                color = botAgent.accentColor.copy(alpha = if (isBotSel) 0.15f else 0.05f),
                                 topLeft = Offset(left + 2.dp.toPx(), botRoomsTop + 2.dp.toPx()),
-                                size = Size(botColWidth - 4.dp.toPx(), h - botRoomsTop - 4.dp.toPx())
+                                size = Size(botColWidth - 3.dp.toPx(), h - botRoomsTop - 4.dp.toPx())
                             )
                             drawLine(wallColor, Offset(right, botRoomsTop), Offset(right, h), wallThickness)
                             drawLine(wallColor, Offset(left, botRoomsTop), Offset(doorCenter - doorHalf, botRoomsTop), wallThickness)
                             drawLine(wallColor, Offset(doorCenter + doorHalf, botRoomsTop), Offset(right, botRoomsTop), wallThickness)
-                            drawLine(botAgent.accentColor.copy(alpha = 0.5f), Offset(doorCenter - doorHalf, botRoomsTop), Offset(doorCenter + doorHalf, botRoomsTop), 1.4.dp.toPx())
+                            drawLine(botAgent.accentColor.copy(alpha = 0.55f), Offset(doorCenter - doorHalf, botRoomsTop), Offset(doorCenter + doorHalf, botRoomsTop), 1.4.dp.toPx())
                         }
 
                         agents.forEach { ag ->
@@ -4013,6 +4991,40 @@ fun AiOfficeLiveDialog(
                                 isSelected = ag.id == selectedAgentId
                             )
                         }
+
+                        // 8. ЖИВОЙ ПАДАЮЩИЙ СНЕГ И СНЕЖИНКИ по всему ИИ-Дому!
+                        val snowFlakeCount = 34
+                        for (s in 0 until snowFlakeCount) {
+                            val baseX = ((s * 37) % 100) / 100f
+                            val speedMult = 1f + (s % 3) * 0.35f
+                            val yNorm = ((s * 0.13f) + snowFallPhase * speedMult) % 1f
+                            val sway = sin((snowFallPhase * 6.28f) + s) * 0.015f
+                            val sx = w * (baseX + sway).coerceIn(0.01f, 0.99f)
+                            val sy = h * yNorm
+                            val radius = if (s % 4 == 0) 2.4.dp.toPx() else 1.5.dp.toPx()
+
+                            drawCircle(
+                                color = Color.White.copy(alpha = if (s % 4 == 0) 0.78f else 0.52f),
+                                radius = radius,
+                                center = Offset(sx, sy)
+                            )
+                            if (s % 4 == 0) {
+                                // Лучики у крупных снежинок
+                                val arm = 3.2.dp.toPx()
+                                drawLine(
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    start = Offset(sx - arm, sy),
+                                    end = Offset(sx + arm, sy),
+                                    strokeWidth = 0.8.dp.toPx()
+                                )
+                                drawLine(
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    start = Offset(sx, sy - arm),
+                                    end = Offset(sx, sy + arm),
+                                    strokeWidth = 0.8.dp.toPx()
+                                )
+                            }
+                        }
                     }
 
                     Row(
@@ -4023,18 +5035,25 @@ fun AiOfficeLiveDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(
-                            modifier = Modifier.weight(0.20f),
+                            modifier = Modifier.weight(0.165f),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Аврора", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFFBBF24), maxLines = 1)
-                            Text("Директор", fontSize = 7.sp, color = Color(0xFFFDE68A), maxLines = 1)
+                            Text("Аврора", fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFFBBF24), maxLines = 1)
+                            Text("Шеф", fontSize = 7.sp, color = Color(0xFFFDE68A), maxLines = 1)
+                        }
+                        Column(
+                            modifier = Modifier.weight(0.165f),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("Виктор", fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF38BDF8), maxLines = 1)
+                            Text("Зам.ТТХ", fontSize = 7.sp, color = Color(0xFFBAE6FD), maxLines = 1)
                         }
                         agents.take(4).forEach { ag ->
                             Column(
-                                modifier = Modifier.weight(0.20f),
+                                modifier = Modifier.weight(0.1675f),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(ag.name, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, color = ag.accentColor, maxLines = 1)
+                                Text(ag.name, fontSize = 8.sp, fontWeight = FontWeight.ExtraBold, color = ag.accentColor, maxLines = 1)
                                 Text(ag.role, fontSize = 7.sp, color = Color.White.copy(alpha = 0.72f), maxLines = 1)
                             }
                         }
@@ -4044,29 +5063,29 @@ fun AiOfficeLiveDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .align(Alignment.Center)
-                            .padding(horizontal = 20.dp),
+                            .padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            "Столовая и кофе",
-                            fontSize = 9.sp,
+                            "Столовая",
+                            fontSize = 8.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFFFCD34D),
-                            modifier = Modifier.padding(top = 88.dp)
+                            modifier = Modifier.padding(top = 74.dp)
                         )
                         Text(
-                            "2027",
-                            fontSize = 9.sp,
+                            "С Новым 2027!",
+                            fontSize = 8.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF34D399),
-                            modifier = Modifier.padding(top = 88.dp)
+                            color = Color(0xFF6EE7B7),
+                            modifier = Modifier.padding(top = 74.dp)
                         )
                         Text(
-                            "Лаунж • OLED ТВ",
-                            fontSize = 9.sp,
+                            "Лаунж ТВ",
+                            fontSize = 8.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFFA5B4FC),
-                            modifier = Modifier.padding(top = 88.dp)
+                            modifier = Modifier.padding(top = 74.dp)
                         )
                     }
 
@@ -4138,7 +5157,7 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                // Карточка выбранного сотрудника с балансом зарплаты, выговорами и скрываемой историей задач
+                // Карточка выбранного сотрудника
                 if (inspectedStatus != null) {
                     val isWalking = agentWalkingFlags[selectedAgentId] ?: false
                     Surface(
@@ -4195,7 +5214,7 @@ fun AiOfficeLiveDialog(
                                         isWalking -> "Идёт по коридору"
                                         inspectedStatus.targetZone == AgentLocationZone.CHIEF_CHECK -> "На проверке у Авроры"
                                         inspectedStatus.targetZone != AgentLocationZone.DESK ->
-                                            "Перерыв: ${inspectedStatus.breakSecondsRemaining.toInt()}с"
+                                            "${inspectedStatus.targetZone.label} (${inspectedStatus.breakSecondsRemaining.toInt()}с)"
                                         else -> "Задача #${inspectedStatus.currentTask.ticketNumber} (${(inspectedStatus.progress * 100).toInt()}%)"
                                     },
                                     fontSize = 10.sp,
@@ -4204,102 +5223,123 @@ fun AiOfficeLiveDialog(
                                 )
                             }
 
-                            Text(
-                                text = when {
-                                    isWalking -> "Направляется: ${inspectedStatus.targetZone.label.lowercase()}."
-                                    inspectedStatus.targetZone == AgentLocationZone.CHIEF_CHECK ->
-                                        "Аврора проверяет точность ТТХ и уникальность устройства."
-                                    inspectedStatus.targetZone == AgentLocationZone.DINING ->
-                                        "Обедает в столовой (осталось ${inspectedStatus.breakSecondsRemaining.toInt()} сек)."
-                                    inspectedStatus.targetZone == AgentLocationZone.LOUNGE ->
-                                        "Отдыхает у новогодней ёлки и ТВ (осталось ${inspectedStatus.breakSecondsRemaining.toInt()} сек)."
-                                    else -> "В работе: ${inspectedStatus.currentTask.title}"
-                                },
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f)
-                            )
-
-                            if (inspectedStatus.targetZone == AgentLocationZone.DESK && !isWalking) {
-                                LinearProgressIndicator(
-                                    progress = { inspectedStatus.progress.coerceIn(0f, 1f) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(CircleShape),
-                                    color = inspectedAgent.accentColor,
-                                    trackColor = inspectedAgent.accentColor.copy(alpha = 0.2f)
-                                )
-                            }
-
-                            HorizontalDivider(color = inspectedAgent.accentColor.copy(alpha = 0.2f))
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { isAgentHistoryExpanded = !isAgentHistoryExpanded }
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.History,
-                                        contentDescription = null,
-                                        tint = inspectedAgent.accentColor,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = "История задач и начислений (${inspectedStatus.completedHistory.size})",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                                    )
-                                }
-                                Icon(
-                                    imageVector = if (isAgentHistoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Показать историю",
-                                    tint = inspectedAgent.accentColor,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-
-                            AnimatedVisibility(visible = isAgentHistoryExpanded) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 4.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                            if (inspectedStatus.targetZone == AgentLocationZone.DESK || inspectedStatus.targetZone == AgentLocationZone.CHIEF_CHECK) {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.72f)
                                 ) {
-                                    inspectedStatus.completedHistory.forEach { done ->
+                                    Column(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.Top,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            horizontalArrangement = Arrangement.SpaceBetween
                                         ) {
-                                            Icon(
-                                                imageVector = if (done.chiefApproved) Icons.Default.CheckCircle else Icons.Default.Cancel,
-                                                contentDescription = null,
-                                                tint = if (done.chiefApproved) Color(0xFF10B981) else Color(0xFFF43F5E),
-                                                modifier = Modifier
-                                                    .size(14.dp)
-                                                    .padding(top = 2.dp)
+                                            Text(
+                                                text = inspectedStatus.currentTask.badge,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = inspectedAgent.accentColor
                                             )
-                                            Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Старт: ${inspectedStatus.currentTask.startedAt}",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                                            )
+                                        }
+                                        Text(
+                                            text = inspectedStatus.currentTask.title,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        LinearProgressIndicator(
+                                            progress = { inspectedStatus.progress.coerceIn(0f, 1f) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp)),
+                                            color = inspectedAgent.accentColor,
+                                            trackColor = inspectedAgent.accentColor.copy(alpha = 0.16f)
+                                        )
+                                    }
+                                }
+                            } else {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.72f)
+                                ) {
+                                    Text(
+                                        text = if (inspectedStatus.targetZone == AgentLocationZone.DINING) {
+                                            "${inspectedAgent.name} сейчас обедает в столовой после сдачи отчёта Авроре."
+                                        } else {
+                                            "${inspectedAgent.name} отдыхает у новогодней ёлки и смотрит телевизор в лаунже."
+                                        },
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                        modifier = Modifier.padding(10.dp)
+                                    )
+                                }
+                            }
+
+                            if (inspectedStatus.completedHistory.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.55f)
+                                ) {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { isAgentHistoryExpanded = !isAgentHistoryExpanded }
+                                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.History,
+                                                    contentDescription = null,
+                                                    tint = inspectedAgent.accentColor,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(Modifier.width(6.dp))
                                                 Text(
-                                                    text = "#${done.ticketNumber} ${done.resultSummary}",
+                                                    text = "Выполненные задачи (${inspectedStatus.completedHistory.size})",
                                                     fontSize = 11.sp,
-                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.88f)
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                                                 )
-                                                Text(
-                                                    text = if (done.chiefApproved)
-                                                        "Подтверждено в ${done.completedAt} • Премия +${done.salaryDelta} ₽"
-                                                    else
-                                                        "${done.rejectReason} (${done.completedAt})",
-                                                    fontSize = 9.sp,
-                                                    color = if (done.chiefApproved) Color(0xFF10B981) else Color(0xFFF43F5E)
-                                                )
+                                            }
+                                            Icon(
+                                                imageVector = if (isAgentHistoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                contentDescription = null,
+                                                tint = inspectedAgent.accentColor,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+
+                                        AnimatedVisibility(visible = isAgentHistoryExpanded) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                                            ) {
+                                                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                                                inspectedStatus.completedHistory.forEach { done ->
+                                                    val statusTag = if (done.chiefApproved) {
+                                                        "Принято (+${done.salaryDelta} ₽)"
+                                                    } else {
+                                                        "Отклонено (${done.salaryDelta} ₽)"
+                                                    }
+                                                    Text(
+                                                        text = "[${done.completedAt}] #${done.ticketNumber} • $statusTag — ${done.resultSummary}",
+                                                        fontSize = 11.sp,
+                                                        color = if (done.chiefApproved) Color(0xFF10B981) else Color(0xFFF43F5E)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -4309,23 +5349,32 @@ fun AiOfficeLiveDialog(
                     }
                 }
 
-                Button(
-                    onClick = onRunScan,
-                    enabled = !isScanning,
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(17.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = if (isScanning) "Агенты собирают свежие новости..." else "Запустить общий сбор и фактчекинг",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Button(
+                        onClick = onRunScan,
+                        enabled = !isScanning,
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            if (isScanning) "Сверка идёт..." else "Ускорить работу",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text("Закрыть", fontSize = 12.sp)
+                    }
                 }
             }
         }
@@ -4340,106 +5389,100 @@ private fun DrawScope.drawDetailedWorkstation(
     progress: Float,
     scanPhase: Float
 ) {
+    val deskW = 36.dp.toPx()
+    val deskH = 11.dp.toPx()
     val dir = if (isTopRow) -1f else 1f
-    val deskW = 42.dp.toPx()
-    val deskH = 18.dp.toPx()
-    val deskCenterY = chairAnchor.y + dir * 15.dp.toPx()
+    val deskCenterY = chairAnchor.y + dir * 13.dp.toPx()
 
-    drawCircle(
-        color = Color(0xFF334155),
-        radius = 7.dp.toPx(),
-        center = chairAnchor
-    )
     drawRoundRect(
         color = Color(0xFF475569),
-        topLeft = Offset(chairAnchor.x - 7.dp.toPx(), chairAnchor.y - dir * 5.dp.toPx() - 2.dp.toPx()),
-        size = Size(14.dp.toPx(), 3.dp.toPx()),
-        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
-    )
-
-    val deskTopLeft = Offset(chairAnchor.x - deskW / 2f, deskCenterY - deskH / 2f)
-    drawRoundRect(
-        color = Color(0xFF273142),
-        topLeft = deskTopLeft,
+        topLeft = Offset(chairAnchor.x - deskW / 2f, deskCenterY - deskH / 2f),
         size = Size(deskW, deskH),
-        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx())
+        cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
     )
     drawRoundRect(
-        color = Color(0xFF64748B).copy(alpha = 0.55f),
-        topLeft = deskTopLeft,
-        size = Size(deskW, deskH),
-        cornerRadius = CornerRadius(5.dp.toPx(), 5.dp.toPx()),
-        style = Stroke(width = 1.dp.toPx())
+        color = Color(0xFF64748B),
+        topLeft = Offset(chairAnchor.x - deskW / 2f + 1.dp.toPx(), deskCenterY - deskH / 2f + 1.dp.toPx()),
+        size = Size(deskW - 2.dp.toPx(), deskH - 2.dp.toPx()),
+        cornerRadius = CornerRadius(2.5.dp.toPx(), 2.5.dp.toPx())
     )
 
-    val kbY = deskCenterY - dir * 4.5.dp.toPx()
-    drawRoundRect(
-        color = Color(0xFF0F172A),
-        topLeft = Offset(chairAnchor.x - 10.dp.toPx(), kbY - 1.8.dp.toPx()),
-        size = Size(16.dp.toPx(), 3.6.dp.toPx()),
-        cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
-    )
-
-    val monW = 24.dp.toPx()
-    val monH = 9.dp.toPx()
-    val monCenterY = deskCenterY + dir * 3.5.dp.toPx()
-    val monTopLeft = Offset(chairAnchor.x - monW / 2f, monCenterY - monH / 2f)
-
+    val monW = 20.dp.toPx()
+    val monH = 4.dp.toPx()
+    val monY = deskCenterY + dir * 2.dp.toPx()
     drawRoundRect(
         color = Color(0xFF090D16),
-        topLeft = monTopLeft,
+        topLeft = Offset(chairAnchor.x - monW / 2f, monY - monH / 2f),
         size = Size(monW, monH),
-        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+        cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
     )
-    drawRoundRect(
-        color = if (isActiveWork) accentColor else Color(0xFF475569),
-        topLeft = monTopLeft,
-        size = Size(monW, monH),
-        cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
-        style = Stroke(width = 1.dp.toPx())
-    )
-
-    val scrLeft = monTopLeft.x + 2.dp.toPx()
-    val scrTop = monTopLeft.y + 2.dp.toPx()
-    val scrW = monW - 4.dp.toPx()
-    val scrH = monH - 4.dp.toPx()
-    drawRect(
-        color = if (isActiveWork) accentColor.copy(alpha = 0.16f) else Color(0xFF1E293B),
-        topLeft = Offset(scrLeft, scrTop),
-        size = Size(scrW, scrH)
+    val screenColor = if (isActiveWork) accentColor else Color(0xFF334155)
+    drawLine(
+        color = screenColor,
+        start = Offset(chairAnchor.x - monW / 2f + 2.dp.toPx(), monY - dir * 1.5.dp.toPx()),
+        end = Offset(chairAnchor.x + monW / 2f - 2.dp.toPx(), monY - dir * 1.5.dp.toPx()),
+        strokeWidth = 2.dp.toPx(),
+        cap = StrokeCap.Round
     )
 
     if (isActiveWork) {
-        val line1W = scrW * (0.35f + 0.25f * sin(scanPhase * 6.28f).let { abs(it) })
-        val line2W = scrW * (0.28f + 0.30f * cos(scanPhase * 6.28f).let { abs(it) })
-        drawLine(
-            color = accentColor,
-            start = Offset(scrLeft + 1.5.dp.toPx(), scrTop + 1.5.dp.toPx()),
-            end = Offset(scrLeft + 1.5.dp.toPx() + line1W, scrTop + 1.5.dp.toPx()),
-            strokeWidth = 1.1.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = Color.White.copy(alpha = 0.85f),
-            start = Offset(scrLeft + 1.5.dp.toPx(), scrTop + 3.2.dp.toPx()),
-            end = Offset(scrLeft + 1.5.dp.toPx() + line2W, scrTop + 3.2.dp.toPx()),
-            strokeWidth = 1.1.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = Color(0xFF34D399),
-            start = Offset(scrLeft + 1.5.dp.toPx(), scrTop + scrH - 1.dp.toPx()),
-            end = Offset(scrLeft + 1.5.dp.toPx() + (scrW - 3.dp.toPx()) * progress.coerceIn(0.1f, 1f), scrTop + scrH - 1.dp.toPx()),
-            strokeWidth = 1.2.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-    } else {
         drawCircle(
-            color = Color(0xFFF59E0B).copy(alpha = 0.75f),
+            color = accentColor.copy(alpha = 0.24f),
+            radius = 12.dp.toPx(),
+            center = Offset(chairAnchor.x, monY - dir * 3.dp.toPx())
+        )
+        val scanX = chairAnchor.x - monW / 2f + 2.dp.toPx() + (monW - 4.dp.toPx()) * scanPhase
+        drawCircle(
+            color = Color.White.copy(alpha = 0.85f),
             radius = 1.4.dp.toPx(),
-            center = Offset(scrLeft + scrW / 2f, scrTop + scrH / 2f)
+            center = Offset(scanX, monY - dir * 1.5.dp.toPx())
         )
     }
+
+    val kbW = 11.dp.toPx()
+    val kbH = 3.2.dp.toPx()
+    val kbY = deskCenterY - dir * 2.5.dp.toPx()
+    drawRoundRect(
+        color = Color(0xFF1E293B),
+        topLeft = Offset(chairAnchor.x - kbW / 2f, kbY - kbH / 2f),
+        size = Size(kbW, kbH),
+        cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx())
+    )
+
+    drawCircle(
+        color = Color(0xFFCBD5E1),
+        radius = 1.8.dp.toPx(),
+        center = Offset(chairAnchor.x + deskW * 0.34f, deskCenterY)
+    )
+
+    drawCircle(
+        color = Color(0xFF1E293B),
+        radius = 6.dp.toPx(),
+        center = chairAnchor
+    )
+    val backOffset = if (isTopRow) 5.5.dp.toPx() else -5.5.dp.toPx()
+    drawRoundRect(
+        color = Color(0xFF334155),
+        topLeft = Offset(chairAnchor.x - 6.dp.toPx(), chairAnchor.y + backOffset - 1.5.dp.toPx()),
+        size = Size(12.dp.toPx(), 3.dp.toPx()),
+        cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+    )
+
+    val barW = 28.dp.toPx()
+    val barH = 2.6.dp.toPx()
+    val barY = if (isTopRow) deskCenterY - 10.dp.toPx() else deskCenterY + 10.dp.toPx()
+    drawRoundRect(
+        color = Color(0xFF0F172A),
+        topLeft = Offset(chairAnchor.x - barW / 2f, barY),
+        size = Size(barW, barH),
+        cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+    )
+    drawRoundRect(
+        color = accentColor,
+        topLeft = Offset(chairAnchor.x - barW / 2f, barY),
+        size = Size(barW * progress.coerceIn(0.05f, 1f), barH),
+        cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
+    )
 }
 
 private fun DrawScope.drawDetailedHumanAgent(
@@ -4453,150 +5496,140 @@ private fun DrawScope.drawDetailedHumanAgent(
     typePhase: Float,
     isSelected: Boolean
 ) {
-    if (isSelected) {
-        drawCircle(
-            color = shirtColor.copy(alpha = 0.24f),
-            radius = 15.dp.toPx(),
-            center = center
-        )
-        drawCircle(
-            color = shirtColor.copy(alpha = 0.75f),
-            radius = 15.dp.toPx(),
-            center = center,
-            style = Stroke(width = 1.2.dp.toPx())
-        )
-    }
-
     val skinColor = Color(0xFFFDE68A)
     val pantsColor = Color(0xFF1E293B)
     val shoeColor = Color(0xFF090D16)
 
+    if (isSelected) {
+        drawCircle(
+            color = shirtColor.copy(alpha = 0.30f),
+            radius = 16.dp.toPx(),
+            center = center
+        )
+        drawCircle(
+            color = shirtColor,
+            radius = 13.dp.toPx(),
+            center = center,
+            style = Stroke(width = 1.6.dp.toPx())
+        )
+    }
+
+    drawCircle(
+        color = Color.Black.copy(alpha = 0.35f),
+        radius = 8.dp.toPx(),
+        center = Offset(center.x, center.y + 5.dp.toPx())
+    )
+
     if (isWalking) {
-        val leftStep = walkPhase * 3.8.dp.toPx()
-        val rightStep = -walkPhase * 3.8.dp.toPx()
+        val leftFootShift = walkPhase * 4.5.dp.toPx()
+        val rightFootShift = -walkPhase * 4.5.dp.toPx()
 
-        drawLine(
+        drawRoundRect(
             color = pantsColor,
-            start = Offset(center.x - 2.6.dp.toPx(), center.y + 3.dp.toPx()),
-            end = Offset(center.x - 2.8.dp.toPx(), center.y + 9.dp.toPx() + leftStep),
-            strokeWidth = 2.8.dp.toPx(),
-            cap = StrokeCap.Round
+            topLeft = Offset(center.x - 4.2.dp.toPx(), center.y + 1.dp.toPx() + leftFootShift * 0.5f),
+            size = Size(3.2.dp.toPx(), 6.dp.toPx()),
+            cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
         )
-        drawCircle(shoeColor, 1.7.dp.toPx(), Offset(center.x - 2.8.dp.toPx(), center.y + 9.5.dp.toPx() + leftStep))
+        drawCircle(shoeColor, 2.dp.toPx(), Offset(center.x - 2.6.dp.toPx(), center.y + 7.dp.toPx() + leftFootShift * 0.6f))
 
-        drawLine(
+        drawRoundRect(
             color = pantsColor,
-            start = Offset(center.x + 2.6.dp.toPx(), center.y + 3.dp.toPx()),
-            end = Offset(center.x + 2.8.dp.toPx(), center.y + 9.dp.toPx() + rightStep),
-            strokeWidth = 2.8.dp.toPx(),
-            cap = StrokeCap.Round
+            topLeft = Offset(center.x + 1.dp.toPx(), center.y + 1.dp.toPx() + rightFootShift * 0.5f),
+            size = Size(3.2.dp.toPx(), 6.dp.toPx()),
+            cornerRadius = CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx())
         )
-        drawCircle(shoeColor, 1.7.dp.toPx(), Offset(center.x + 2.8.dp.toPx(), center.y + 9.5.dp.toPx() + rightStep))
-    } else if (zone == AgentLocationZone.LOUNGE || zone == AgentLocationZone.DINING) {
-        drawLine(
-            color = pantsColor,
-            start = Offset(center.x - 2.8.dp.toPx(), center.y + 3.dp.toPx()),
-            end = Offset(center.x - 2.8.dp.toPx(), center.y + 7.5.dp.toPx()),
-            strokeWidth = 2.8.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-        drawLine(
-            color = pantsColor,
-            start = Offset(center.x + 2.8.dp.toPx(), center.y + 3.dp.toPx()),
-            end = Offset(center.x + 2.8.dp.toPx(), center.y + 7.5.dp.toPx()),
-            strokeWidth = 2.8.dp.toPx(),
-            cap = StrokeCap.Round
-        )
+        drawCircle(shoeColor, 2.dp.toPx(), Offset(center.x + 2.6.dp.toPx(), center.y + 7.dp.toPx() + rightFootShift * 0.6f))
     }
 
     drawRoundRect(
         color = shirtColor,
-        topLeft = Offset(center.x - 6.5.dp.toPx(), center.y - 3.8.dp.toPx()),
+        topLeft = Offset(center.x - 6.5.dp.toPx(), center.y - 4.5.dp.toPx()),
         size = Size(13.dp.toPx(), 8.5.dp.toPx()),
-        cornerRadius = CornerRadius(3.8.dp.toPx(), 3.8.dp.toPx())
+        cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
     )
 
-    if (zone == AgentLocationZone.DESK && !isWalking) {
+    if (isWalking) {
+        val armSwing = walkPhase * 3.5.dp.toPx()
+        drawCircle(skinColor, 1.9.dp.toPx(), Offset(center.x - 7.5.dp.toPx(), center.y + armSwing))
+        drawCircle(skinColor, 1.9.dp.toPx(), Offset(center.x + 7.5.dp.toPx(), center.y - armSwing))
+    } else if (zone == AgentLocationZone.DESK) {
         val dir = if (isTopRow) -1f else 1f
-        val kbReachY = center.y + dir * 10.5.dp.toPx()
-        val shift = typePhase * 1.4.dp.toPx()
+        val leftType = typePhase * 1.4.dp.toPx()
+        val rightType = -typePhase * 1.4.dp.toPx()
         drawLine(
-            color = skinColor,
-            start = Offset(center.x - 5.5.dp.toPx(), center.y + dir * 1.8.dp.toPx()),
-            end = Offset(center.x - 3.2.dp.toPx(), kbReachY + shift),
-            strokeWidth = 2.2.dp.toPx(),
+            color = shirtColor,
+            start = Offset(center.x - 5.5.dp.toPx(), center.y + dir * 2.dp.toPx()),
+            end = Offset(center.x - 4.dp.toPx(), center.y + dir * 7.5.dp.toPx() + leftType),
+            strokeWidth = 2.4.dp.toPx(),
             cap = StrokeCap.Round
         )
+        drawCircle(skinColor, 1.8.dp.toPx(), Offset(center.x - 4.dp.toPx(), center.y + dir * 8.dp.toPx() + leftType))
+
         drawLine(
-            color = skinColor,
-            start = Offset(center.x + 5.5.dp.toPx(), center.y + dir * 1.8.dp.toPx()),
-            end = Offset(center.x + 3.2.dp.toPx(), kbReachY - shift),
-            strokeWidth = 2.2.dp.toPx(),
+            color = shirtColor,
+            start = Offset(center.x + 5.5.dp.toPx(), center.y + dir * 2.dp.toPx()),
+            end = Offset(center.x + 4.dp.toPx(), center.y + dir * 7.5.dp.toPx() + rightType),
+            strokeWidth = 2.4.dp.toPx(),
             cap = StrokeCap.Round
         )
-    } else if (isWalking) {
-        val armSwing = -walkPhase * 2.5.dp.toPx()
-        drawLine(
-            color = skinColor,
-            start = Offset(center.x - 6.5.dp.toPx(), center.y - 1.dp.toPx()),
-            end = Offset(center.x - 7.5.dp.toPx(), center.y + 3.dp.toPx() + armSwing),
-            strokeWidth = 2.1.dp.toPx(),
-            cap = StrokeCap.Round
+        drawCircle(skinColor, 1.8.dp.toPx(), Offset(center.x + 4.dp.toPx(), center.y + dir * 8.dp.toPx() + rightType))
+    } else if (zone == AgentLocationZone.CHIEF_CHECK) {
+        drawCircle(skinColor, 1.8.dp.toPx(), Offset(center.x - 5.dp.toPx(), center.y - 4.dp.toPx()))
+        drawRoundRect(
+            color = Color.White,
+            topLeft = Offset(center.x - 7.dp.toPx(), center.y - 7.dp.toPx()),
+            size = Size(5.dp.toPx(), 4.dp.toPx()),
+            cornerRadius = CornerRadius(1.dp.toPx(), 1.dp.toPx())
         )
-        drawLine(
-            color = skinColor,
-            start = Offset(center.x + 6.5.dp.toPx(), center.y - 1.dp.toPx()),
-            end = Offset(center.x + 7.5.dp.toPx(), center.y + 3.dp.toPx() - armSwing),
-            strokeWidth = 2.1.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-    } else if (zone == AgentLocationZone.DINING) {
-        drawLine(
-            color = skinColor,
-            start = Offset(center.x + 5.dp.toPx(), center.y),
-            end = Offset(center.x + 8.dp.toPx(), center.y - 2.2.dp.toPx()),
-            strokeWidth = 2.1.dp.toPx(),
-            cap = StrokeCap.Round
-        )
-        drawCircle(Color(0xFFFBBF24), 2.dp.toPx(), Offset(center.x + 8.5.dp.toPx(), center.y - 2.6.dp.toPx()))
+    } else {
+        drawCircle(skinColor, 1.8.dp.toPx(), Offset(center.x - 6.5.dp.toPx(), center.y + 1.dp.toPx()))
+        drawCircle(skinColor, 1.8.dp.toPx(), Offset(center.x + 6.5.dp.toPx(), center.y + 1.dp.toPx()))
+        if (zone == AgentLocationZone.DINING) {
+            drawCircle(Color.White, 2.dp.toPx(), Offset(center.x + 7.5.dp.toPx(), center.y + 1.dp.toPx()))
+        }
     }
 
-    val headCenter = Offset(center.x, center.y - 6.dp.toPx())
+    val headY = center.y - 7.5.dp.toPx()
     drawCircle(
         color = skinColor,
-        radius = 4.5.dp.toPx(),
-        center = headCenter
+        radius = 4.6.dp.toPx(),
+        center = Offset(center.x, headY)
     )
     drawArc(
         color = hairColor,
         startAngle = 180f,
         sweepAngle = 180f,
         useCenter = true,
-        topLeft = Offset(headCenter.x - 4.5.dp.toPx(), headCenter.y - 4.5.dp.toPx()),
-        size = Size(9.dp.toPx(), 9.dp.toPx())
+        topLeft = Offset(center.x - 4.8.dp.toPx(), headY - 4.8.dp.toPx()),
+        size = Size(9.6.dp.toPx(), 7.dp.toPx())
     )
-    val lookingBack = zone == AgentLocationZone.DESK && isTopRow && !isWalking
-    if (!lookingBack) {
-        drawCircle(Color(0xFF0F172A), 0.8.dp.toPx(), Offset(headCenter.x - 1.5.dp.toPx(), headCenter.y + 0.5.dp.toPx()))
-        drawCircle(Color(0xFF0F172A), 0.8.dp.toPx(), Offset(headCenter.x + 1.5.dp.toPx(), headCenter.y + 0.5.dp.toPx()))
+    if (isWalking || !isTopRow) {
+        drawCircle(Color(0xFF0F172A), 0.9.dp.toPx(), Offset(center.x - 1.6.dp.toPx(), headY + 0.5.dp.toPx()))
+        drawCircle(Color(0xFF0F172A), 0.9.dp.toPx(), Offset(center.x + 1.6.dp.toPx(), headY + 0.5.dp.toPx()))
     }
 }
 
 @Composable
-fun SettingsSectionCard(title: String, content: @Composable () -> Unit) {
+fun SettingsSectionCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             Text(
                 text = title,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.primary
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(6.dp))
             content()
         }
     }
@@ -4612,37 +5645,32 @@ fun NewsCard(
     onToggleSave: () -> Unit
 ) {
     val primary = MaterialTheme.colorScheme.primary
-    val accentColor = when (item.platform) {
-        "СМИ и блоги" -> primary
-        "Оф. сайт" -> Color(0xFF10B981)
-        "Instagram" -> Color(0xFFF43F5E)
-        else -> Color(0xFF38BDF8)
-    }
-
-    val shape = RoundedCornerShape(settings.cornerRadius.dp)
-    val cardBorder = if (settings.cardStyle == "outlined") {
-        BorderStroke(0.8.dp, primary.copy(alpha = 0.18f))
-    } else null
-
-    val cardContainerColor = if (settings.cardStyle == "filled") {
-        primary.copy(alpha = 0.06f)
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
-
     val scale = settings.fontScale
+    val isCompact = settings.cardStyle == "compact"
+
+    val borderStroke = when (settings.cardStyle) {
+        "outlined" -> BorderStroke(1.dp, primary.copy(alpha = if (item.isVeryFresh6h) 0.48f else 0.2f))
+        "compact" -> BorderStroke(0.8.dp, primary.copy(alpha = 0.16f))
+        else -> null
+    }
+    val containerColor = when (settings.cardStyle) {
+        "filled" -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+        else -> MaterialTheme.colorScheme.surface
+    }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onOpen() },
-        shape = shape,
-        border = cardBorder,
-        colors = CardDefaults.cardColors(containerColor = cardContainerColor)
+        shape = RoundedCornerShape(settings.cornerRadius.dp),
+        border = borderStroke,
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Column(
-            modifier = Modifier.padding(if (settings.cardStyle == "compact") 11.dp else 13.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(
+                horizontal = if (isCompact) 11.dp else 13.dp,
+                vertical = if (isCompact) 9.dp else 11.dp
+            )
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -4650,34 +5678,42 @@ fun NewsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    modifier = Modifier.weight(1f).padding(end = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "${item.sourceLabel} • ${item.brand}",
-                        color = accentColor,
-                        fontSize = (11 * scale).sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
                     if (item.isVeryFresh6h) {
-                        Spacer(Modifier.width(6.dp))
-                        Surface(
-                            shape = RoundedCornerShape(5.dp),
-                            color = primary.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = "NEW",
-                                color = primary,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                maxLines = 1,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(primary)
+                        )
+                        Spacer(Modifier.width(5.dp))
                     }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = primary.copy(alpha = 0.13f)
+                    ) {
+                        Text(
+                            text = item.brand,
+                            fontSize = (10 * scale).sp,
+                            fontWeight = FontWeight.Bold,
+                            color = primary,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = item.sourceLabel,
+                        fontSize = (11 * scale).sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                    )
                 }
+
                 Text(
                     text = item.timeLabel,
                     fontSize = (10 * scale).sp,
@@ -4686,35 +5722,64 @@ fun NewsCard(
                 )
             }
 
+            Spacer(Modifier.height(if (isCompact) 4.dp else 6.dp))
+
             Text(
                 text = item.title,
-                fontSize = (15 * scale).sp,
+                fontSize = (if (isCompact) 14f else 15f * scale).sp,
                 fontWeight = FontWeight.Bold,
-                lineHeight = (20 * scale).sp,
+                lineHeight = (if (isCompact) 18f else 20f * scale).sp,
                 color = MaterialTheme.colorScheme.onSurface
             )
 
-            if (settings.showSummary && settings.cardStyle != "compact") {
+            if (settings.showSummary) {
+                Spacer(Modifier.height(4.dp))
                 Text(
                     text = item.summary,
                     fontSize = (13 * scale).sp,
                     lineHeight = (18 * scale).sp,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.80f)
+                    maxLines = if (isCompact) 2 else 3,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
                 )
             }
+
+            Spacer(Modifier.height(if (isCompact) 6.dp else 8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                        contentDescription = "Сохранить",
+                        tint = if (isSaved) primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clickable { onToggleSave() }
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Поделиться",
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                        modifier = Modifier
+                            .size(17.dp)
+                            .clickable { onShare() }
+                    )
+                }
+
                 Surface(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { onOpen() },
                     shape = RoundedCornerShape(8.dp),
                     color = primary.copy(alpha = 0.13f),
-                    border = BorderStroke(0.8.dp, primary.copy(alpha = 0.38f))
+                    border = BorderStroke(0.9.dp, primary.copy(alpha = 0.42f))
                 ) {
                     Text(
                         text = "Читать ↗",
@@ -4725,82 +5790,52 @@ fun NewsCard(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onShare() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Поделиться",
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onToggleSave() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (isSaved) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
-                            contentDescription = "В избранное",
-                            tint = if (isSaved) primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
             }
         }
     }
 }
 
-fun openCustomTab(context: Context, url: String) {
+private fun openCustomTab(context: Context, url: String) {
     try {
-        CustomTabsIntent.Builder()
-            .setShowTitle(true)
-            .build()
-            .launchUrl(context, Uri.parse(url))
+        val intent = CustomTabsIntent.Builder().setShowTitle(true).build()
+        intent.launchUrl(context, Uri.parse(url))
     } catch (_: Exception) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Exception) {
+        }
     }
 }
 
-fun shareArticle(context: Context, item: NewsItem) {
-    try {
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, item.title)
-            putExtra(Intent.EXTRA_TEXT, "${item.title}\n\n${item.url}")
-        }
-        context.startActivity(Intent.createChooser(intent, "Поделиться новостью"))
-    } catch (_: Exception) {
+private fun shareArticle(context: Context, item: NewsItem) {
+    val text = "${item.title}\n\nИсточник: ${item.sourceLabel} (${item.brand})\n${item.url}"
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, item.title)
+        putExtra(Intent.EXTRA_TEXT, text)
     }
+    context.startActivity(Intent.createChooser(sendIntent, "Поделиться новостью"))
 }
 
-fun shareReviewArticle(context: Context, article: TechReviewArticle) {
-    try {
-        val specsText = article.specs.joinToString("\n") { "• ${it.label}: ${it.value}" }
-        val shareBody = buildString {
-            append("${article.headline}\n")
-            append("Оценка: ${article.score} (${article.approvedByChief})\n\n")
-            append("${article.leadSummary}\n\n")
-            append("Характеристики (ТТХ):\n$specsText")
-        }
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, article.headline)
-            putExtra(Intent.EXTRA_TEXT, shareBody)
-        }
-        context.startActivity(Intent.createChooser(intent, "Поделиться обзором"))
-    } catch (_: Exception) {
+private fun shareReviewArticle(context: Context, article: TechReviewArticle) {
+    val specsText = article.specs.joinToString("\n") { "• ${it.label}: ${it.value}" }
+    val prosText = article.pros.joinToString("\n") { "+ $it" }
+    val text = buildString {
+        appendLine(article.headline)
+        appendLine("Оценка редакции: ${article.score}")
+        appendLine()
+        appendLine(article.leadSummary)
+        appendLine()
+        appendLine("ТТХ:")
+        appendLine(specsText)
+        appendLine()
+        appendLine("Плюсы:")
+        appendLine(prosText)
     }
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, article.headline)
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(sendIntent, "Поделиться обзором ${article.deviceName}"))
 }
