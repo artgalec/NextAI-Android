@@ -135,6 +135,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -356,7 +357,7 @@ data class PersistedOfficeState(
 // ============================================================================
 
 object LocalCache {
-    private const val PREF_NAME = "nexus_tech_feed_v8"
+    private const val PREF_NAME = "nexus_tech_feed_v9"
     private const val KEY_SETTINGS = "settings_json"
     private const val KEY_NEWS = "news_json"
     private const val KEY_REVIEWS = "reviews_json"
@@ -494,10 +495,12 @@ object LocalCache {
             val consArr = JSONArray().apply { r.cons.forEach { put(it) } }
             val specsArr = JSONArray().apply {
                 r.specs.forEach { s ->
-                    put(JSONObject().apply {
-                        put("label", s.label)
-                        put("value", s.value)
-                    })
+                    put(
+                        JSONObject().apply {
+                            put("label", s.label)
+                            put("value", s.value)
+                        }
+                    )
                 }
             }
             arr.put(
@@ -1124,7 +1127,9 @@ fun SectionBlockCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -1599,7 +1604,7 @@ fun StyledFilterChip(
 @Composable
 fun FeedScreen(
     modifier: Modifier = Modifier,
-    bottomPadding: androidx.compose.ui.unit.Dp,
+    bottomPadding: Dp,
     news: List<NewsItem>,
     settings: UserAppSettings,
     onDeletePost: (String) -> Unit
@@ -1631,7 +1636,6 @@ fun FeedScreen(
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = bottomPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Компактный однострочный поиск со встроенной кнопкой фильтров
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -1744,7 +1748,10 @@ fun FeedScreen(
                                 Switch(
                                     checked = onlyFresh,
                                     onCheckedChange = { onlyFresh = it },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.onPrimary, checkedTrackColor = primary)
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                                        checkedTrackColor = primary
+                                    )
                                 )
                             }
 
@@ -1828,7 +1835,7 @@ private fun brandAccentColor(brand: String, fallback: Color): Color = when (bran
 @Composable
 fun ReviewsScreen(
     modifier: Modifier = Modifier,
-    bottomPadding: androidx.compose.ui.unit.Dp,
+    bottomPadding: Dp,
     reviews: List<TechReviewArticle>,
     settings: UserAppSettings,
     onAddOrderedReview: (TechReviewArticle) -> Unit,
@@ -1857,7 +1864,6 @@ fun ReviewsScreen(
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = bottomPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Компактная панель управления обзорами
         item {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -1874,7 +1880,11 @@ fun ReviewsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 6.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 6.dp)
+                        ) {
                             Text(
                                 text = "Редакционные тесты",
                                 fontSize = 14.sp,
@@ -1955,7 +1965,6 @@ fun ReviewsScreen(
             }
         }
 
-        // Яркие витринные карточки обзоров
         items(filtered, key = { it.id }) { article ->
             val cardAccent = brandAccentColor(article.brand, primary)
             val cardShape = RoundedCornerShape(settings.cornerRadius.dp)
@@ -1971,7 +1980,6 @@ fun ReviewsScreen(
                 shadowElevation = 3.dp
             ) {
                 Column {
-                    // Яркая верхняя витринная шапка карточки обзора
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1991,7 +1999,9 @@ fun ReviewsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(
-                                modifier = Modifier.weight(1f).padding(end = 10.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 10.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Row(
@@ -2029,7 +2039,6 @@ fun ReviewsScreen(
                                 )
                             }
 
-                            // Крупный яркий бейдж оценки
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = cardAccent,
@@ -2086,7 +2095,6 @@ fun ReviewsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        // Мини-плашки ключевых плюсов и характеристик прямо в карточке
                         if (article.pros.isNotEmpty()) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
@@ -2129,7 +2137,9 @@ fun ReviewsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f).padding(end = 8.dp)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp)
                             )
 
                             Row(
@@ -2441,7 +2451,9 @@ fun NewsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    modifier = Modifier.weight(1f).padding(end = 6.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2514,7 +2526,9 @@ fun NewsCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 )
 
                 Row(
@@ -2584,7 +2598,6 @@ fun NewsCard(
 // ============================================================================
 
 private val DefaultOfficeAgents = listOf(
-    // ВЕРХНИЙ РЯД: РУКОВОДСТВО И СТАРШИЕ РЕДАКТОРЫ
     OfficeAgentProfile(
         id = 0,
         name = "Аврора",
@@ -2657,7 +2670,6 @@ private val DefaultOfficeAgents = listOf(
         diningSeatPos = Offset(0.115f, 0.595f),
         loungeSeatPos = Offset(0.765f, 0.585f)
     ),
-    // НИЖНИЙ РЯД: ОТДЕЛ ОБЗОРОВ И ТЕСТИРОВАНИЯ
     OfficeAgentProfile(
         id = 4,
         name = "Артур",
@@ -2774,11 +2786,6 @@ private val AutonomousTaskTemplates = mapOf(
     )
 )
 
-/**
- * Детерминированный построитель маршрута по коридорам и дверным проёмам.
- * Возвращает полный список путевых точек (waypoints), по которым агент идёт последовательно
- * до самого конца без застревания на порогах и в стенах.
- */
 private fun buildCorridorRouteQueue(
     start: Offset,
     profile: OfficeAgentProfile,
@@ -2800,49 +2807,37 @@ private fun buildCorridorRouteQueue(
 
     val pts = mutableListOf<Offset>()
 
-    // 1. Безопасный выход из текущего помещения на ближайшую горизонтальную магистраль
-    val currentLaneY: Float
-    when {
-        // Внутри верхнего кабинета
+    val currentLaneY: Float = when {
         start.y < 0.28f -> {
             val doorX = if (abs(start.x - 0.125f) < 0.11f) 0.125f else profile.roomDoorPos.x
             pts.add(Offset(doorX, 0.265f))
             pts.add(Offset(doorX, topLaneY))
-            currentLaneY = topLaneY
+            topLaneY
         }
-        // Внутри нижнего кабинета
         start.y > 0.71f -> {
             pts.add(profile.roomDoorPos)
             pts.add(profile.corridorEntryPos)
-            currentLaneY = botLaneY
+            botLaneY
         }
-        // Внутри узкой кухни слева
         start.x < 0.20f -> {
             pts.add(kitchenDoorInner)
             pts.add(kitchenDoorOuter)
             pts.add(Offset(leftHallX, topLaneY))
-            currentLaneY = topLaneY
+            topLaneY
         }
-        // Внутри комнаты отдыха справа
         start.x > 0.70f -> {
             pts.add(loungeDoorInner)
             pts.add(loungeDoorOuter)
             pts.add(Offset(rightHallX, topLaneY))
-            currentLaneY = topLaneY
+            topLaneY
         }
-        // Уже в коридоре
         else -> {
             val nearestLane = if (start.y < 0.5f) topLaneY else botLaneY
-            if (abs(start.x - leftHallX) < 0.04f || abs(start.x - centerSpineX) < 0.04f || abs(start.x - rightHallX) < 0.04f) {
-                pts.add(Offset(start.x, nearestLane))
-            } else {
-                pts.add(Offset(start.x, nearestLane))
-            }
-            currentLaneY = nearestLane
+            pts.add(Offset(start.x, nearestLane))
+            nearestLane
         }
     }
 
-    // 2. Переход по магистралям в целевую зону
     when (targetZone) {
         AgentLocationZone.DESK -> {
             val destLaneY = if (profile.isTopRow) topLaneY else botLaneY
@@ -2880,7 +2875,6 @@ private fun buildCorridorRouteQueue(
         }
     }
 
-    // Убираем дубликаты подряд идущих точек
     val cleaned = mutableListOf<Offset>()
     for (p in pts) {
         if (cleaned.isEmpty() || hypot(cleaned.last().x - p.x, cleaned.last().y - p.y) > 0.008f) {
@@ -2921,7 +2915,7 @@ private fun buildInitialAgentStatuses(): Map<Int, AgentLiveStatus> {
 @Composable
 fun AiHouseScreen(
     modifier: Modifier = Modifier,
-    bottomPadding: androidx.compose.ui.unit.Dp,
+    bottomPadding: Dp,
     settings: UserAppSettings,
     newsList: List<NewsItem>,
     existingReviews: List<TechReviewArticle>,
@@ -2943,9 +2937,8 @@ fun AiHouseScreen(
     var deputyEditLog by remember { mutableStateOf(persisted?.deputyEditLog ?: emptyList()) }
 
     var agentPositions by remember {
-        mutableStateOf(DefaultOfficeAgents.associate { it.id to it.deskChairPos })
+        mutableStateOf>(DefaultOfficeAgents.associate { it.id to it.deskChairPos })
     }
-    // Очередь путевых точек для каждого агента, гарантирующая прохождение без застревания
     var agentWaypoints by remember {
         mutableStateOf>>(emptyMap())
     }
@@ -2953,7 +2946,7 @@ fun AiHouseScreen(
         mutableStateOf>(emptyMap())
     }
     var agentWalkPhases by remember {
-        mutableStateOf(DefaultOfficeAgents.associate { it.id to (it.id * 0.13f) % 1f })
+        mutableStateOf>(DefaultOfficeAgents.associate { it.id to (it.id * 0.13f) % 1f })
     }
     var smoothWorkPhase by remember { mutableFloatStateOf(0f) }
 
@@ -2999,18 +2992,17 @@ fun AiHouseScreen(
 
                 DefaultOfficeAgents.forEach { profile ->
                     val status = updatedStatuses[profile.id] ?: return@forEach
-                    val curPos = agentPositions[profile.id] ?: profile.deskChairPos
-                    val prevWalk = agentWalkPhases[profile.id] ?: 0f
+                    val curPos: Offset = agentPositions[profile.id] ?: profile.deskChairPos
+                    val prevWalk: Float = agentWalkPhases[profile.id] ?: 0f
 
-                    val finalDestination = when (status.targetZone) {
+                    val finalDestination: Offset = when (status.targetZone) {
                         AgentLocationZone.DESK -> profile.deskChairPos
                         AgentLocationZone.CHIEF_CHECK -> Offset(0.125f, 0.225f)
                         AgentLocationZone.DINING -> profile.diningSeatPos
                         AgentLocationZone.LOUNGE -> profile.loungeSeatPos
                     }
 
-                    // Если целевая зона сменилась — строим новую последовательность точек по коридорам
-                    var queue = updatedWaypoints[profile.id].orEmpty()
+                    var queue: List<Offset> = updatedWaypoints[profile.id].orEmpty()
                     if (updatedRouteTargets[profile.id] != status.targetZone) {
                         queue = buildCorridorRouteQueue(curPos, profile, status.targetZone)
                         updatedRouteTargets[profile.id] = status.targetZone
@@ -3019,7 +3011,7 @@ fun AiHouseScreen(
 
                     val distToFinal = hypot(finalDestination.x - curPos.x, finalDestination.y - curPos.y)
                     if (queue.isNotEmpty() || distToFinal > 0.005f) {
-                        val nextWaypoint = queue.firstOrNull() ?: finalDestination
+                        val nextWaypoint: Offset = queue.firstOrNull() ?: finalDestination
                         val wDist = hypot(nextWaypoint.x - curPos.x, nextWaypoint.y - curPos.y)
                         val step = moveSpeedPerSec * dt
 
@@ -3250,7 +3242,6 @@ fun AiHouseScreen(
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = bottomPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Блок 1: Интерактивная карта ИИ-Дома
         item {
             SectionBlockCard(
                 title = "Карта ИИ-Дома",
@@ -3360,7 +3351,6 @@ fun AiHouseScreen(
             }
         }
 
-        // Блок 2: Отдельная карточка выбранного агента
         item {
             val selectedProfile = DefaultOfficeAgents.first { it.id == selectedAgentId }
             val selectedStatus = agentStatuses[selectedAgentId]
@@ -3533,7 +3523,6 @@ fun AiHouseScreen(
             }
         }
 
-        // Блок 3: Отдельный командный центр и журналы
         item {
             SectionBlockCard(
                 title = "Управление отделом и журналы",
@@ -3824,7 +3813,7 @@ fun AiHouseScreen(
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
-    bottomPadding: androidx.compose.ui.unit.Dp,
+    bottomPadding: Dp,
     settings: UserAppSettings,
     deletedTotalCount: Int,
     isLoading: Boolean,
@@ -3842,7 +3831,6 @@ fun SettingsScreen(
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = bottomPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Блок 1: Цветовая палитра
         item {
             SectionBlockCard(
                 title = "Цветовая палитра",
@@ -3899,7 +3887,6 @@ fun SettingsScreen(
             }
         }
 
-        // Блок 2: Режим темы и стиль карточек
         item {
             SectionBlockCard(
                 title = "Тема и оформление карточек",
@@ -3962,7 +3949,6 @@ fun SettingsScreen(
             }
         }
 
-        // Блок 3: Типографика, скругление и анонсы
         item {
             SectionBlockCard(
                 title = "Шрифт и геометрия",
@@ -4036,18 +4022,22 @@ fun SettingsScreen(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
                     )
                     Switch(
                         checked = settings.showSummary,
                         onCheckedChange = { onSettingsChange(settings.copy(showSummary = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.onPrimary, checkedTrackColor = primary)
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            checkedTrackColor = primary
+                        )
                     )
                 }
             }
         }
 
-        // Блок 4: Управление данными, восстановление и кэш
         item {
             SectionBlockCard(
                 title = "Данные и синхронизация",
@@ -4124,7 +4114,7 @@ fun SettingsScreen(
 }
 
 // ============================================================================
-// ИНТЕРАКТИВНЫЙ ХОЛСТ ИИ-ДОМА (ДОРОЖКИ, ЛАМПЫ, СТУЛЬЯ СО СПИНКАМИ, КУХНЯ)
+// ИНТЕРАКТИВНЫЙ ХОЛСТ ИИ-ДОМА
 // ============================================================================
 
 @Composable
@@ -4466,7 +4456,6 @@ private fun DrawScope.drawAiNewYearHouseFloorplan(
         )
     }
 
-    // Узкая кухня слева с едой и терминалом оплаты
     val kitchenLeft = 3.dp.toPx()
     val kitchenTop = h * 0.335f
     val kitchenW = w * 0.185f
@@ -4553,7 +4542,6 @@ private fun DrawScope.drawAiNewYearHouseFloorplan(
         size = Size(8.dp.toPx(), 4.5.dp.toPx())
     )
 
-    // Комната отдыха справа
     val loungeLeft = w * 0.705f
     val loungeTop = h * 0.335f
     val loungeW = w - loungeLeft - 3.dp.toPx()
